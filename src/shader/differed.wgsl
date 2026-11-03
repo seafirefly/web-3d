@@ -1,9 +1,10 @@
 struct Uniform
 {
-    directional_light  : vec4<f32>,
-    ambient_light      : vec4<f32>,
-    camera_position    : vec4<f32>,
-    debug_params       : vec4<f32>,
+    directional_light     : vec4<f32>,
+    ambient_light         : vec4<f32>,
+    camera_position       : vec4<f32>,
+    light_view_projection : mat4x4<f32>,
+    debug_params          : vec4<f32>,
 }
 
 // basic differed
@@ -13,14 +14,17 @@ struct Uniform
 @group(0) @binding(3) var           t_albedo        : texture_2d<f32>;
 @group(0) @binding(4) var           t_metallic      : texture_2d<f32>;
 @group(1) @binding(0) var<uniform>  u_differd       : Uniform;
+@group(2) @binding(0) var           t_shadow_map    : texture_depth_2d;
+@group(2) @binding(1) var           s_shadow_map    : sampler_comparison;
 // IBL
-@group(2) @binding(0) var t_irradiance   : texture_cube<f32>;
-@group(2) @binding(1) var t_prefilter    : texture_cube<f32>;
-@group(2) @binding(2) var s_env          : sampler;
+@group(3) @binding(0) var t_irradiance   : texture_cube<f32>;
+@group(3) @binding(1) var t_prefilter    : texture_cube<f32>;
+@group(3) @binding(2) var s_env          : sampler;
 
 const PI : f32 = radians(180.0);
 const GGX_D_EPSILON : f32 = 0.0000001;
 const GGX_VIS_EPSILON : f32 = 0.0000001;
+const SHADOW_FILTER_RADIUS : f32 = 2.0;
 
 // pbr utility
 
@@ -37,6 +41,7 @@ fn distribution_GGX(normal : vec3<f32>, half : vec3<f32>, roughness : f32) -> f3
 	
   return nom / max(denom, GGX_D_EPSILON);
 }
+
 // Smith height-correlated G2 folded into 1/(4*NdotL*NdotV) — matches Blender Principled BSDF
 fn visibility_GGX(n_dot_l: f32, n_dot_v: f32, roughness: f32) -> f32
 {
@@ -50,6 +55,7 @@ fn fresnel_schlick(cos_theta :f32, f0 : vec3<f32>) -> vec3<f32>
 {
     return f0 + (1.0 - f0) * pow(1.0 - cos_theta, 5.0);
 }
+
 // Burley (Disney) diffuse — Blender Principled BSDF diffuse lobe
 fn diffuse_burley(n_dot_l: f32, n_dot_v: f32, h_dot_v: f32, roughness: f32) -> f32
 {
@@ -132,6 +138,63 @@ fn pbr_ambient_diffuse_lighting(
   return kd * albedo * ambient_irradiance * hemi_weight / PI;
 }
 
+fn sample_directional_shadow(
+  world_position: vec3<f32>,
+  normal: vec3<f32>,
+  light_direction: vec3<f32>,
+) -> f32
+{
+  let shadow_clip = u_differd.light_view_projection * vec4<f32>(world_position, 1.0);
+  let safe_w = max(abs(shadow_clip.w), 0.000001);
+  let inv_w = select(-1.0 / safe_w, 1.0 / safe_w, shadow_clip.w >= 0.0);
+  let shadow_ndc = shadow_clip.xyz * inv_w;
+  let shadow_uv_raw = vec2<f32>(shadow_ndc.x * 0.5 + 0.5, shadow_ndc.y * -0.5 + 0.5);
+  let shadow_uv = clamp(shadow_uv_raw, vec2<f32>(0.001, 0.001), vec2<f32>(0.999, 0.999));
+  let in_front = select(0.0, 1.0, shadow_clip.w > 0.0);
+  let inside_uv = select(0.0, 1.0,
+    shadow_uv_raw.x > 0.0 && shadow_uv_raw.x < 1.0 && shadow_uv_raw.y > 0.0 && shadow_uv_raw.y < 1.0);
+  let inside_depth = select(0.0, 1.0, shadow_ndc.z > 0.0 && shadow_ndc.z < 1.0);
+  let valid_shadow = in_front * inside_uv * inside_depth;
+
+  let slope_bias = max(0.002 * (1.0 - max(dot(normal, light_direction), 0.0)), 0.0005);
+  let shadow_depth = clamp(shadow_ndc.z - slope_bias, 0.0, 1.0);
+  let shadow_dimensions = vec2<f32>(
+    f32(textureDimensions(t_shadow_map).x),
+    f32(textureDimensions(t_shadow_map).y)
+  );
+  let texel_size = 1.0 / max(shadow_dimensions, vec2<f32>(1.0, 1.0));
+
+  var shadow_sample = 0.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-2.0 * SHADOW_FILTER_RADIUS, -2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 1.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-1.0 * SHADOW_FILTER_RADIUS, -2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 4.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 0.0, -2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 6.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 1.0 * SHADOW_FILTER_RADIUS, -2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 4.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 2.0 * SHADOW_FILTER_RADIUS, -2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 1.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-2.0 * SHADOW_FILTER_RADIUS, -1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 4.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-1.0 * SHADOW_FILTER_RADIUS, -1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 16.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 0.0, -1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 24.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 1.0 * SHADOW_FILTER_RADIUS, -1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 16.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 2.0 * SHADOW_FILTER_RADIUS, -1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 4.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-2.0 * SHADOW_FILTER_RADIUS, 0.0), shadow_depth) * 6.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-1.0 * SHADOW_FILTER_RADIUS, 0.0), shadow_depth) * 24.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 0.0, 0.0), shadow_depth) * 36.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 1.0 * SHADOW_FILTER_RADIUS, 0.0), shadow_depth) * 24.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 2.0 * SHADOW_FILTER_RADIUS, 0.0), shadow_depth) * 6.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-2.0 * SHADOW_FILTER_RADIUS, 1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 4.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-1.0 * SHADOW_FILTER_RADIUS, 1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 16.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 0.0, 1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 24.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 1.0 * SHADOW_FILTER_RADIUS, 1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 16.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 2.0 * SHADOW_FILTER_RADIUS, 1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 4.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-2.0 * SHADOW_FILTER_RADIUS, 2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 1.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-1.0 * SHADOW_FILTER_RADIUS, 2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 4.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 0.0, 2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 6.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 1.0 * SHADOW_FILTER_RADIUS, 2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 4.0;
+  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 2.0 * SHADOW_FILTER_RADIUS, 2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 1.0;
+  shadow_sample /= 256.0;
+
+  return 1.0 - valid_shadow + shadow_sample * valid_shadow;
+}
+
 // render funcions
 
 @vertex
@@ -167,6 +230,7 @@ fn fs_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
   let view                        : vec3<f32> = safe_normalize(u_differd.camera_position.xyz - position.xyz);
   let roughness                   : f32       = clamp(metallic_roughness.g, 0.045, 1.0);
   let metallic                    : f32       = clamp(metallic_roughness.b, 0.0, 1.0);
+  let shadow_visibility           : f32       = sample_directional_shadow(position.xyz, normal, light_direction);
   let lighting                    : PbrLighting = pbr_direct_lighting(
     normal,
     view,
@@ -185,7 +249,7 @@ fn fs_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
     u_differd.ambient_light.rgb * max(u_differd.ambient_light.w, 0.0),
   );
 
-  var frag_color : vec4<f32> = vec4<f32>(direct_color * light_radiance + ambient_diffuse, albedo.a);
+  var frag_color : vec4<f32> = vec4<f32>(direct_color * light_radiance * shadow_visibility + ambient_diffuse, albedo.a);
     return frag_color;
 }
 
@@ -211,6 +275,7 @@ fn fs_ibl_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
   let view                        : vec3<f32> = safe_normalize(u_differd.camera_position.xyz - position.xyz);
   let roughness                   : f32       = clamp(metallic_roughness.g, 0.045, 1.0);
   let metallic                    : f32       = clamp(metallic_roughness.b, 0.0, 1.0);
+  let shadow_visibility           : f32       = sample_directional_shadow(position.xyz, normal, light_direction);
   let lighting                    : PbrLighting = pbr_direct_lighting(
     normal,
     view,
@@ -231,7 +296,7 @@ fn fs_ibl_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
     u_differd.ambient_light.rgb * max(u_differd.ambient_light.w, 0.0),
   );
 
-  var frag_color = vec4<f32>(direct_color * light_radiance + diffuse_ibl + ambient_diffuse, albedo.a);
+  var frag_color = vec4<f32>(direct_color * light_radiance * shadow_visibility + diffuse_ibl + ambient_diffuse, albedo.a);
     return frag_color;
 }
 
@@ -257,6 +322,7 @@ fn fs_debug_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
     let view                       : vec3<f32> = safe_normalize(u_differd.camera_position.xyz - position.xyz);
     let directional_light_intensity: f32       = max(u_differd.directional_light.w, 0.0);
     let light_radiance             : f32       = directional_light_intensity;
+    let shadow_visibility          : f32       = sample_directional_shadow(position.xyz, shading_normal, light_direction);
     let lighting                   : PbrLighting = pbr_direct_lighting(
       shading_normal,
       view,
@@ -289,7 +355,7 @@ fn fs_debug_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
     }
     else if(u_differd.debug_params.x == 6.0)
     {
-      return vec4(lighting.specular * light_radiance, 1.0);
+      return vec4(lighting.specular * light_radiance * shadow_visibility, 1.0);
     }
 
     return vec4(depth, 0.0, 0.0, 1.0);

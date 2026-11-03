@@ -5,5 +5,6 @@ pub mod differed_shading;
 pub mod forward_shading;
 pub mod hdr_convertion_shading;
 pub mod line_grid_shading;
+pub mod shadow;
 pub mod sky_shading;
 pub mod webgpu;

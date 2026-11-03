@@ -83,6 +83,7 @@ pub async fn main() {
             composite_shading_resource: None,
             sky_shading_resource: None,
             hdr_convertion_resource: None,
+            shadow_resource: None,
         }));
 
     // Initialize control response JS object and event listener

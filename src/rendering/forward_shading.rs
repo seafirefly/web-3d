@@ -1,9 +1,10 @@
 use crate::engine;
 use crate::engine::constant;
 use crate::rendering::common;
-use crate::rendering::webgpu;
+use crate::rendering::shadow;
 use crate::rendering::webgpu::{
-    WebGPUInterface, WebGPUShaderContext, WEBGPU_CULL_MODE, WEBGPU_DEPTH_FORMAT, WEBGPU_FRONT_FACE,
+    WebGPUInterface, WebGPUShaderContext, WebGPUUniqueResources, WEBGPU_CULL_MODE,
+    WEBGPU_DEPTH_FORMAT, WEBGPU_FRONT_FACE,
 };
 use crate::types::Shared;
 use wasm_bindgen::JsCast;
@@ -16,12 +17,15 @@ pub fn forward_shading_pass(
     shader_map: &mut std::collections::HashMap<std::string::String, WebGPUShaderContext>,
     command_encoder: &mut wgpu::CommandEncoder,
     view: &wgpu::TextureView,
+    global_resources: &mut WebGPUUniqueResources,
 ) {
     // Update phong resources
     {
+        let shadow_resource = global_resources.shadow_resource.as_ref().unwrap();
+        let light_view_projection = shadow_resource.light_view_projection;
         let phong_shader_context: &WebGPUShaderContext = &shader_map
             .entry("Phong".to_string())
-            .or_insert(webgpu::create_shader_context(&interface, "Phong"));
+            .or_insert(create_phong_shader_context(&interface, shadow_resource));
 
         for scene_object in scene.borrow().objects.iter() {
             if scene_object.mesh_rendering_resource.is_some() {
@@ -30,6 +34,7 @@ pub fn forward_shading_pass(
                     &phong_shader_context,
                     &scene.clone(),
                     &scene_object,
+                    light_view_projection,
                 );
             }
         }
@@ -108,6 +113,11 @@ pub fn forward_shading_pass(
                     .bind_group_2,
                 &[],
             );
+            forward_shading_pass.set_bind_group(
+                2,
+                phong_shader_context._bind_group_3.as_ref().unwrap(),
+                &[],
+            );
             forward_shading_pass.set_index_buffer(
                 object
                     .mesh_rendering_resource
@@ -145,15 +155,20 @@ pub fn forward_shading_pass(
 // Phong Shading -----------------------------------------------------------------------------
 
 struct PhongUniform {
+    _model_matrix: [f32; 16],
     _transform_matrix: [f32; 16],
     _rotation_matrix: [f32; 16],
     _directional_light: [f32; 4],
     _ambient_light: [f32; 4],
     _inverse_matrix: [f32; 16],
+    _light_view_projection: [f32; 16],
     _buffer_type: [f32; 4],
 }
 
-pub fn create_phong_shader_context(interface: &WebGPUInterface) -> WebGPUShaderContext {
+pub fn create_phong_shader_context(
+    interface: &WebGPUInterface,
+    shadow_resource: &shadow::WebGPUShadowResource,
+) -> WebGPUShaderContext {
     let shader: wgpu::ShaderModule =
         interface
             .device
@@ -251,12 +266,55 @@ pub fn create_phong_shader_context(interface: &WebGPUInterface) -> WebGPUShaderC
                 label: Some("bind_group_layout_2"),
             });
 
+    let bind_group_layout_3 = interface.device.create_bind_group_layout(
+        &wgpu::BindGroupLayoutDescriptor {
+            label: Some("bind_group_layout_3"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Depth,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                    count: None,
+                },
+            ],
+        },
+    );
+
+    let bind_group_3 = interface.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Phong shadow bind group"),
+        layout: &bind_group_layout_3,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(
+                    &shadow_resource
+                        .shadow_texture
+                        .create_view(&wgpu::TextureViewDescriptor::default()),
+                ),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&shadow_resource.shadow_sampler),
+            },
+        ],
+    });
+
     let pipeline_layout: wgpu::PipelineLayout =
         interface
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[&bind_group_layout, &bind_group_layout_2],
+                bind_group_layouts: &[&bind_group_layout, &bind_group_layout_2, &bind_group_layout_3],
                 push_constant_ranges: &[],
             });
 
@@ -299,6 +357,7 @@ pub fn create_phong_shader_context(interface: &WebGPUInterface) -> WebGPUShaderC
         _shader_name: "Phong".to_string(),
         bind_group_layout: bind_group_layout,
         _bind_group_layout_2: Some(bind_group_layout_2),
+        _bind_group_3: Some(bind_group_3),
         render_pipeline: render_pipeline,
         uniform_size: uniform_size,
     };
@@ -309,6 +368,7 @@ fn update_phong_shading_resource(
     shader_resource: &WebGPUShaderContext,
     scene: &Shared<engine::scene::Scene>,
     object: &engine::scene::SceneObject,
+    light_view_projection: glam::Mat4,
 ) {
     if object.mesh_rendering_resource.is_none() {
         log::debug!("[Update] Rendering resource is empty");
@@ -524,11 +584,13 @@ fn update_phong_shading_resource(
             glam::Mat4::from_quat(model_matrix.to_scale_rotation_translation().1);
 
         let mut uniform_total: Vec<f32> = transform_matrix.to_cols_array().to_vec();
+        uniform_total.splice(0..0, model_matrix.to_cols_array());
         uniform_total.extend_from_slice(&rotaton_matrix.to_cols_array().to_vec());
         uniform_total.extend_from_slice(&directional.to_array());
         uniform_total.extend_from_slice(&[0.0]); // Padding!
         uniform_total.extend_from_slice(&ambient);
         uniform_total.extend_from_slice(&inverse_projection.to_cols_array().to_vec());
+        uniform_total.extend_from_slice(&light_view_projection.to_cols_array());
         uniform_total.extend_from_slice(&[
             scene_value.parameters.forward_debug_type as f32,
             0.0,

@@ -50,6 +50,7 @@ pub fn differed_shading_pass(
         update_differed_shading_buffer(
             &interface,
             &scene,
+            global_resources.shadow_resource.as_ref().unwrap(),
             &global_resources.differed_shading_resource.as_ref().unwrap(),
         );
     }
@@ -303,14 +304,24 @@ pub fn differed_shading_pass(
                     &[],
                 );
 
+                differed_shading_pass.set_bind_group(
+                    2,
+                    &global_resources
+                        .differed_shading_resource
+                        .as_ref()
+                        .unwrap()
+                        .bind_groups[2],
+                    &[],
+                );
+
                 if is_use_ibl {
                     differed_shading_pass.set_bind_group(
-                        2,
+                        3,
                         &global_resources
                             .differed_shading_resource
                             .as_ref()
                             .unwrap()
-                            .bind_groups[2],
+                            .bind_groups[3],
                         &[],
                     );
                 }
@@ -526,6 +537,7 @@ pub fn create_differed_gbuffer_shader_context(interface: &WebGPUInterface) -> We
         render_pipeline,
         bind_group_layout: uniform_bind_group_layout,
         _bind_group_layout_2: Some(texture_bind_group_layout),
+        _bind_group_3: None,
         uniform_size,
     };
 }
@@ -789,6 +801,7 @@ struct DifferedUniform {
     _directional_light: [f32; 4],
     _ambient_light: [f32; 4],
     _camera_position: [f32; 4],
+    _light_view_projection: [f32; 16],
     _debug: [f32; 4],
 }
 
@@ -1024,6 +1037,56 @@ fn create_differed_shading_context(
                 label: Some("Bind group 1"),
             });
 
+    let shadow_resource = global_resources
+        .shadow_resource
+        .as_ref()
+        .expect("Shadow resource should be initialized before differed shading");
+
+    let shadow_bind_group_layout: wgpu::BindGroupLayout = interface
+        .device
+        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Shadow Bind Group Layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Depth,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                    count: None,
+                },
+            ],
+        });
+
+    let shadow_bind_group: wgpu::BindGroup = interface
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &shadow_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(
+                        &shadow_resource
+                            .shadow_texture
+                            .create_view(&wgpu::TextureViewDescriptor::default()),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&shadow_resource.shadow_sampler),
+                },
+            ],
+            label: Some("Bind group 2"),
+        });
+
     // pipeline
 
     let pipeline_layout: wgpu::PipelineLayout =
@@ -1031,7 +1094,11 @@ fn create_differed_shading_context(
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[&gbuffer_bind_group_layout, &uniform_bind_group_layout],
+                bind_group_layouts: &[
+                    &gbuffer_bind_group_layout,
+                    &uniform_bind_group_layout,
+                    &shadow_bind_group_layout,
+                ],
                 push_constant_ranges: &[],
             });
 
@@ -1096,6 +1163,7 @@ fn create_differed_shading_context(
     let mut bind_groups: Vec<wgpu::BindGroup> = Vec::new();
     bind_groups.push(gbuffer_bind_group);
     bind_groups.push(uniform_bind_group);
+    bind_groups.push(shadow_bind_group);
 
     // ibl context
     let mut ibl_render_pipeline: Option<wgpu::RenderPipeline> = None;
@@ -1196,6 +1264,7 @@ fn create_differed_shading_context(
                     bind_group_layouts: &[
                         &gbuffer_bind_group_layout,
                         &uniform_bind_group_layout,
+                        &shadow_bind_group_layout,
                         &ibl_bind_group_layout,
                     ],
                     push_constant_ranges: &[],
@@ -1247,6 +1316,7 @@ fn create_differed_shading_context(
 fn update_differed_shading_buffer(
     interface: &WebGPUInterface,
     scene: &Shared<engine::scene::Scene>,
+    shadow_resource: &crate::rendering::shadow::WebGPUShadowResource,
     resource: &WebGPUDifferedShadingResource,
 ) {
     let scene_value = scene.borrow();
@@ -1268,6 +1338,7 @@ fn update_differed_shading_buffer(
     uniform_total.extend_from_slice(&[directional_intensity]);
     uniform_total.extend_from_slice(&ambient);
     uniform_total.extend_from_slice(&camera_position);
+    uniform_total.extend_from_slice(&shadow_resource.light_view_projection.to_cols_array());
     uniform_total.extend_from_slice(&[
         scene_value.parameters.differed_debug_type as f32,
         0.0,

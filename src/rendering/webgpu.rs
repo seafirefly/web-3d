@@ -2,7 +2,7 @@ use crate::engine::{self, constant};
 use crate::rendering::common;
 use crate::rendering::{
     bloom_shading, composite_shading, differed_shading, forward_shading, hdr_convertion_shading,
-    line_grid_shading, sky_shading,
+    line_grid_shading, shadow, sky_shading,
 };
 use crate::types::Shared;
 use wasm_bindgen::JsCast;
@@ -33,6 +33,7 @@ pub struct WebGPUShaderContext {
     pub render_pipeline: wgpu::RenderPipeline,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub _bind_group_layout_2: Option<wgpu::BindGroupLayout>,
+    pub _bind_group_3: Option<wgpu::BindGroup>,
     pub uniform_size: u64,
 }
 
@@ -44,6 +45,8 @@ pub struct WebGPUMeshRenderingResource {
     pub uniform_buffer: Option<wgpu::Buffer>,
     pub bind_group: Option<wgpu::BindGroup>,
     pub bind_group_2: Option<wgpu::BindGroup>,
+    pub shadow_uniform_buffer: Option<wgpu::Buffer>,
+    pub shadow_bind_group: Option<wgpu::BindGroup>,
     pub _base_color_texture: Option<wgpu::Texture>,
     pub base_color_texture_view: Option<wgpu::TextureView>,
     pub base_color_texture_sampler: Option<wgpu::Sampler>,
@@ -63,6 +66,7 @@ pub struct WebGPUUniqueResources {
     pub composite_shading_resource: Option<composite_shading::WebGPUCompositeShadingResource>,
     pub hdr_convertion_resource: Option<hdr_convertion_shading::WebGPUHDREnvironmentResource>,
     pub sky_shading_resource: Option<sky_shading::WebGPUSkyShadingResource>,
+    pub shadow_resource: Option<shadow::WebGPUShadowResource>,
 }
 
 // Webgpu Contexts -----------------------------------------------------------------------------
@@ -220,9 +224,6 @@ pub async fn init_interface<'a>() -> WebGPUInterface<'a> {
 /// Create shader context for a shader. It creates render pipeline and bind group layout for the shader.
 pub fn create_shader_context(interface: &WebGPUInterface, name: &str) -> WebGPUShaderContext {
     match name {
-        "Phong" => {
-            return forward_shading::create_phong_shader_context(interface);
-        }
         "DifferedGBuffer" => {
             return differed_shading::create_differed_gbuffer_shader_context(interface);
         }
@@ -263,6 +264,13 @@ pub fn update_rendering_main(
                 label: Some("Main command encoder"),
             });
 
+    shadow::shadow_pass(
+        &interface,
+        &scene,
+        &mut main_command_encoder,
+        &mut global_resources.borrow_mut(),
+    );
+
     // HDR conversion pass
     if scene.borrow().parameters.is_use_sky_box {
         hdr_convertion_shading::hdr_convertion_pass(
@@ -285,6 +293,7 @@ pub fn update_rendering_main(
                     shader_map,
                     &mut main_command_encoder,
                     &intermediate_view,
+                    &mut global_resources.borrow_mut(),
                 );
             }
 
@@ -440,6 +449,8 @@ pub fn create_mesh_rendering_resource(
         uniform_buffer: None,
         bind_group: None,
         bind_group_2: None,
+        shadow_uniform_buffer: None,
+        shadow_bind_group: None,
         _base_color_texture: Some(base_color_texture),
         base_color_texture_view: Some(base_color_texture_view),
         base_color_texture_sampler: Some(base_color_texture_sampler),
