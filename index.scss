@@ -2,6 +2,13 @@ $theme-color: #ffffff;
 $theme-color-2: #dfdfdf;
 $font-size: 13px;
 
+// Left border with indent, shared by accordion content and widget wrappers
+@mixin nested-block {
+	margin-left: 5px;
+	padding-left: 5px;
+	border-left: 1px solid $theme-color-2;
+}
+
 body {
 	margin: 0;
 	padding: 0;
@@ -22,25 +29,19 @@ body {
 #dialog-wrapper {
 	position: absolute;
 	top: 0;
-	left: 0px;
+	left: 0;
 	width: 220px;
 	margin-top: 20px;
 	margin-left: 20px;
 
 	border: 1px solid $theme-color;
 	border-radius: 2px;
-	//backdrop-filter: blur(30px);
 	background-color: black;
 
 	color: $theme-color;
 }
-.dialog-element{
+.dialog-element {
 	padding: 5px;
-	//margin-bottom: 5px;
-	
-	//border: 1px solid $theme-color;
-	//border-radius: 3px;
-	//backdrop-filter: blur(12px);
 }
 .dialog-element-hidden {
 	display: none;
@@ -63,7 +64,6 @@ body {
 }
 .accordion-label {
 	display: block;
-	margin-bottom: 5px;
 	position: relative;
 	padding-left: 20px;
 	margin-bottom: 1px;
@@ -75,12 +75,11 @@ body {
 	text-align: left;
 }
 .accordion-label::before {
-	content:"";
+	content: "";
 	width: 6px;
 	height: 6px;
 	border-top: 2px solid $theme-color;
 	border-right: 2px solid $theme-color;
-	//-webkit-transform: rotate(45deg);
 	position: absolute;
 	top:calc( 50% - 3px );
 	left: 3px;
@@ -93,6 +92,8 @@ body {
 	transition: all 0.2s;
 }
 .accordion-content {
+	@include nested-block;
+
 	max-height: 0;
 	margin-top: 5px;
 	overflow: hidden;
@@ -102,17 +103,7 @@ body {
 	max-height: 500px;
 	transition: all 1.5s;
 }
-.inner-accordion-label{
-	text-align: left;
-	font-size: $font-size;
-	font-weight: normal;
-	color: $theme-color;
-}
-.inner-accordion-content{
-	margin-left: 5px;
-	padding-left: 5px;
-	border-left: 1px solid $theme-color-2;
-}
+// Nested accordions use the same content styles as top-level ones; only the label arrow differs
 .inner-accordion-label::before {
 	border-top: 1px solid $theme-color;
 	border-right: 1px solid $theme-color;
@@ -120,10 +111,9 @@ body {
 
 // widget
 
-.widget-wrapper{
-	margin-left: 5px;
-	padding-left: 5px;
-	border-left: 1px solid $theme-color-2;
+.widget-wrapper {
+	@include nested-block;
+
 	font-size: $font-size;
 }
 .widget-wrapper-hidden{
@@ -157,15 +147,13 @@ body {
 .select-element{
 	text-align-last: left;
 
-	//appearance: none;
 	border: 1px solid $theme-color-2;
     border-radius: 3px;
 	color: $theme-color-2;
 	background-color: transparent;
 	font-size: $font-size;
 }
-.select-element:hover{
-	border: 1px solid $theme-color-2;
+.select-element:hover {
 	color: $theme-color;
 }
 .select-element:focus{
