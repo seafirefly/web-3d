@@ -1,13 +1,13 @@
 $theme-color: #ffffff;
 $theme-color-2: #dfdfdf;
-$font-size: 12px;
+$font-size: 13px;
 
 body {
 	margin: 0;
 	padding: 0;
 	overflow: hidden;
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-	--font-family-mono: Menlo, Monaco, Consolas, "Droid Sans Mono", monospace;
+	--font-family-mono: "Courier New";
 }
 
 #canvas {
@@ -23,14 +23,14 @@ body {
 	position: absolute;
 	top: 0;
 	left: 0px;
-	width: 200px;
+	width: 220px;
 	margin-top: 20px;
 	margin-left: 20px;
 
 	border: 1px solid $theme-color;
 	border-radius: 2px;
-	backdrop-filter: blur(30px);
-	//background-color: black;
+	//backdrop-filter: blur(30px);
+	background-color: black;
 
 	color: $theme-color;
 }
