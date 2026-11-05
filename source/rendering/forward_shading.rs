@@ -6,14 +6,13 @@ use crate::rendering::webgpu::{
     WebGPUInterface, WebGPUShaderContext, WebGPUUniqueResources, WEBGPU_CULL_MODE,
     WEBGPU_DEPTH_FORMAT, WEBGPU_FRONT_FACE,
 };
-use crate::types::Shared;
 use wasm_bindgen::JsCast;
 
 // Forward shading pass -----------------------------------------------------------------------------
 
 pub fn forward_shading_pass(
     interface: &WebGPUInterface,
-    scene: &Shared<engine::scene::Scene>,
+    scene: &engine::scene::Scene,
     shader_map: &mut std::collections::HashMap<std::string::String, WebGPUShaderContext>,
     command_encoder: &mut wgpu::CommandEncoder,
     view: &wgpu::TextureView,
@@ -27,12 +26,12 @@ pub fn forward_shading_pass(
             .entry("Phong".to_string())
             .or_insert(create_phong_shader_context(&interface, shadow_resource));
 
-        for scene_object in scene.borrow().objects.iter() {
+        for scene_object in scene.objects.iter() {
             if scene_object.mesh_rendering_resource.is_some() {
                 update_phong_shading_resource(
                     &interface,
                     &phong_shader_context,
-                    &scene.clone(),
+                    scene,
                     &scene_object,
                     light_view_projection,
                 );
@@ -41,7 +40,7 @@ pub fn forward_shading_pass(
     }
 
     // Begin forward rendering pass
-    let scene_value = scene.borrow();
+    let scene_value = scene;
     let mut forward_shading_pass: wgpu::RenderPass<'_> =
         command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Differed shading pass"),
@@ -88,7 +87,7 @@ pub fn forward_shading_pass(
 
         forward_shading_pass.set_pipeline(&phong_shader_context.render_pipeline);
 
-        for object in scene.borrow().objects.iter() {
+        for object in scene.objects.iter() {
             if object.mesh_rendering_resource.is_none() {
                 continue;
             }
@@ -366,7 +365,7 @@ pub fn create_phong_shader_context(
 fn update_phong_shading_resource(
     interface: &WebGPUInterface,
     shader_resource: &WebGPUShaderContext,
-    scene: &Shared<engine::scene::Scene>,
+    scene: &engine::scene::Scene,
     object: &engine::scene::SceneObject,
     light_view_projection: glam::Mat4,
 ) {
@@ -550,7 +549,7 @@ fn update_phong_shading_resource(
         let height: u32 = canvas.client_height() as u32;
         let aspect_ratio: f32 = width as f32 / height as f32;
 
-        let scene_value = scene.borrow();
+        let scene_value = scene;
 
         let eye: glam::Vec3 = scene_value.parameters.eye_location;
         let direction: glam::Vec3 = scene_value.parameters.eye_direction;

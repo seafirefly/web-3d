@@ -75,16 +75,15 @@ pub async fn main() {
     > = std::collections::HashMap::new();
 
     // Global unique resources that are shared in the whole rendering process. It is created once and shared between objects.
-    let mut global_shader_map: Shared<WebGPUUniqueResources> =
-        Shared::new(RefCell::new(WebGPUUniqueResources {
-            differed_shading_resource: None,
-            line_grid_shading_resource: None,
-            bloom_shading_resource: None,
-            composite_shading_resource: None,
-            sky_shading_resource: None,
-            hdr_convertion_resource: None,
-            shadow_resource: None,
-        }));
+    let mut global_resources: WebGPUUniqueResources = WebGPUUniqueResources {
+        differed_shading_resource: None,
+        line_grid_shading_resource: None,
+        bloom_shading_resource: None,
+        composite_shading_resource: None,
+        sky_shading_resource: None,
+        hdr_convertion_resource: None,
+        shadow_resource: None,
+    };
 
     // Initialize control response JS object and event listener
     let control_response_js: Shared<web::eventlistener::ControlResponseJs> = Shared::new(
@@ -103,9 +102,9 @@ pub async fn main() {
 
         rendering::webgpu::update_rendering_main(
             &webgpu_interface,
-            &scene,
+            &scene.borrow(),
             &mut material_shader_map,
-            &mut global_shader_map,
+            &mut global_resources,
         );
 
         if scene.borrow().parameters.is_first_update {

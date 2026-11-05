@@ -3,14 +3,13 @@ use crate::engine::constant;
 use crate::rendering::webgpu::{
     WebGPUInterface, WebGPUUniqueResources, WEBGPU_CULL_MODE, WEBGPU_FRONT_FACE,
 };
-use crate::Shared;
 use wasm_bindgen::JsCast;
 
 // Line grid shading pass --------------------------------------------------------------------------------------
 
 pub fn line_grid_pass(
     interface: &WebGPUInterface,
-    scene: &Shared<engine::scene::Scene>,
+    scene: &engine::scene::Scene,
     command_encoder: &mut wgpu::CommandEncoder,
     view: &wgpu::TextureView,
     global_resources: &mut WebGPUUniqueResources,
@@ -22,7 +21,7 @@ pub fn line_grid_pass(
 
     update_line_grid_shader_resource(
         &interface,
-        &scene,
+        scene,
         &global_resources
             .line_grid_shading_resource
             .as_ref()
@@ -242,7 +241,7 @@ fn create_line_grid_shader_resource(interface: &WebGPUInterface) -> WebGPULineGr
 
 fn update_line_grid_shader_resource(
     interface: &WebGPUInterface,
-    scene: &Shared<engine::scene::Scene>,
+    scene: &engine::scene::Scene,
     line_grid_shader_resource: &WebGPULineGridShadingResource,
 ) {
     let canvas: web_sys::Element = gloo::utils::document()
@@ -253,7 +252,7 @@ fn update_line_grid_shader_resource(
     let height: u32 = canvas.client_height() as u32;
     let aspect_ratio: f32 = width as f32 / height as f32;
 
-    let scene_value = scene.borrow();
+    let scene_value = scene;
 
     let eye: glam::Vec3 = scene_value.parameters.eye_location;
     let direction: glam::Vec3 = scene_value.parameters.eye_direction;

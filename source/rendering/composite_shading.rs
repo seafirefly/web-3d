@@ -3,13 +3,12 @@ use crate::engine::constant;
 use crate::rendering::webgpu::{
     WebGPUInterface, WebGPUUniqueResources, WEBGPU_CULL_MODE, WEBGPU_FRONT_FACE,
 };
-use crate::Shared;
 
 // composite shading pass --------------------------------------------------------------------------------------
 
 pub fn composite_pass(
     interface: &WebGPUInterface,
-    scene: &Shared<engine::scene::Scene>,
+    scene: &engine::scene::Scene,
     command_encoder: &mut wgpu::CommandEncoder,
     view: &wgpu::TextureView,
     global_resources: &mut WebGPUUniqueResources,
@@ -19,7 +18,7 @@ pub fn composite_pass(
             Some(create_composite_shader_resource(&interface));
     }
 
-    update_composite_uniform_buffer(&interface, &scene, global_resources);
+    update_composite_uniform_buffer(&interface, scene, global_resources);
 
     let mut composite_shading_pass: wgpu::RenderPass<'_> =
         command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -255,10 +254,10 @@ fn create_composite_shader_resource(interface: &WebGPUInterface) -> WebGPUCompos
 
 fn update_composite_uniform_buffer(
     interface: &WebGPUInterface,
-    scene: &Shared<engine::scene::Scene>,
+    scene: &engine::scene::Scene,
     global_resources: &mut WebGPUUniqueResources,
 ) {
-    let scene_parameters = scene.borrow();
+    let scene_parameters = scene;
     let tone_mapping_mode: f32 = match scene_parameters.parameters.tone_mapping_type {
         engine::scene::ToneMappingType::Off => 0.0,
         engine::scene::ToneMappingType::Aces => 1.0,
@@ -281,7 +280,6 @@ fn update_composite_uniform_buffer(
         engine::scene::CompositeViewTransform::Filmic => 2.0,
     };
     let use_dither = if scene_parameters.parameters.composite_use_dither { 1.0 } else { 0.0 };
-    drop(scene_parameters);
 
     interface.queue.write_buffer(
         &global_resources

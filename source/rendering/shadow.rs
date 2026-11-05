@@ -2,7 +2,6 @@ use crate::engine;
 use crate::engine::constant;
 use crate::rendering::common;
 use crate::rendering::webgpu::{WebGPUInterface, WebGPUUniqueResources, WEBGPU_CULL_MODE};
-use crate::types::Shared;
 
 pub const SHADOW_MAP_SIZE: u32 = 4096;
 pub const SHADOW_DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
@@ -19,7 +18,7 @@ pub struct WebGPUShadowResource {
 
 pub fn shadow_pass(
     interface: &WebGPUInterface,
-    scene: &Shared<engine::scene::Scene>,
+    scene: &engine::scene::Scene,
     command_encoder: &mut wgpu::CommandEncoder,
     global_resources: &mut WebGPUUniqueResources,
 ) {
@@ -51,7 +50,7 @@ pub fn shadow_pass(
 
     shadow_render_pass.set_pipeline(&shadow_resource.render_pipeline);
 
-    for object in scene.borrow().objects.iter() {
+    for object in scene.objects.iter() {
         if object.mesh_rendering_resource.is_none() || object.source_mesh.is_none() {
             continue;
         }
@@ -188,7 +187,7 @@ fn create_shadow_resource(interface: &WebGPUInterface) -> WebGPUShadowResource {
 
 fn update_shadow_mesh_resource(
     interface: &WebGPUInterface,
-    scene: &Shared<engine::scene::Scene>,
+    scene: &engine::scene::Scene,
     object: &engine::scene::SceneObject,
     shadow_resource: &WebGPUShadowResource,
 ) {
@@ -222,9 +221,8 @@ fn update_shadow_mesh_resource(
         rendering_resource.shadow_bind_group = Some(bind_group);
     }
 
-    let scene_value = scene.borrow();
     let mut model_matrix = glam::Mat4::from_cols_array_2d(&object.world_transform);
-    if scene_value.parameters.is_convert_y_to_z {
+    if scene.parameters.is_convert_y_to_z {
         let y_to_z_mat = glam::Mat4::from_axis_angle(glam::Vec3::X, std::f32::consts::PI / 2.0);
         model_matrix = y_to_z_mat * model_matrix;
     }
@@ -240,8 +238,8 @@ fn update_shadow_mesh_resource(
     );
 }
 
-pub fn compute_light_view_projection(scene: &Shared<engine::scene::Scene>) -> glam::Mat4 {
-    let scene_value = scene.borrow();
+pub fn compute_light_view_projection(scene: &engine::scene::Scene) -> glam::Mat4 {
+    let scene_value = scene;
     let mut directional = glam::Vec3::from_array(
         scene_value
             .parameters
@@ -295,8 +293,6 @@ pub fn compute_light_view_projection(scene: &Shared<engine::scene::Scene>) -> gl
             }
         }
     }
-
-    drop(scene_value);
 
     let world_points = if world_points_visible.is_empty() {
         world_points_all

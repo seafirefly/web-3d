@@ -6,14 +6,13 @@ use crate::rendering::webgpu::{
     WebGPUInterface, WebGPUShaderContext, WebGPUUniqueResources, WEBGPU_CULL_MODE,
     WEBGPU_DEPTH_FORMAT,
 };
-use crate::types::Shared;
 use wasm_bindgen::JsCast;
 
 // Differed shading pass -----------------------------------------------------------------------------
 
 pub fn differed_shading_pass(
     interface: &WebGPUInterface,
-    scene: &Shared<engine::scene::Scene>,
+    scene: &engine::scene::Scene,
     shader_map: &mut std::collections::HashMap<std::string::String, WebGPUShaderContext>,
     command_encoder: &mut wgpu::CommandEncoder,
     view: &wgpu::TextureView,
@@ -25,12 +24,12 @@ pub fn differed_shading_pass(
             .entry("DifferedGBuffer".to_string())
             .or_insert(webgpu::create_shader_context(&interface, "DifferedGBuffer"));
 
-        for scene_object in scene.borrow().objects.iter() {
+        for scene_object in scene.objects.iter() {
             if scene_object.mesh_rendering_resource.is_some() {
                 update_differed_gbuffer_shading_resource(
                     &interface,
                     &differed_gbuffer_shader,
-                    &scene.clone(),
+                    scene,
                     &scene_object,
                 );
             }
@@ -49,7 +48,7 @@ pub fn differed_shading_pass(
     {
         update_differed_shading_buffer(
             &interface,
-            &scene,
+            scene,
             global_resources.shadow_resource.as_ref().unwrap(),
             &global_resources.differed_shading_resource.as_ref().unwrap(),
         );
@@ -156,7 +155,7 @@ pub fn differed_shading_pass(
 
             gbuffer_pass.set_pipeline(&differed_gbuffer_shader_context.render_pipeline);
 
-            for object in scene.borrow().objects.iter() {
+            for object in scene.objects.iter() {
                 if object.mesh_rendering_resource.is_none() {
                     continue;
                 }
@@ -225,8 +224,8 @@ pub fn differed_shading_pass(
 
         // differed shading pass
         {
-            let scene_value = scene.borrow();
-            let is_debug_out = scene.borrow().parameters.differed_debug_type != 0;
+            let scene_value = scene;
+            let is_debug_out = scene.parameters.differed_debug_type != 0;
             let is_use_ibl = false; // TODO: Implement IBL
 
             // render pass setup
@@ -545,7 +544,7 @@ pub fn create_differed_gbuffer_shader_context(interface: &WebGPUInterface) -> We
 fn update_differed_gbuffer_shading_resource(
     interface: &WebGPUInterface,
     shader_context: &WebGPUShaderContext,
-    scene: &Shared<engine::scene::Scene>,
+    scene: &engine::scene::Scene,
     object: &engine::scene::SceneObject,
 ) {
     if object.mesh_rendering_resource.is_none() {
@@ -754,7 +753,7 @@ fn update_differed_gbuffer_shading_resource(
         let height: u32 = canvas.client_height() as u32;
         let aspect_ratio: f32 = width as f32 / height as f32;
 
-        let scene_value = scene.borrow();
+        let scene_value = scene;
         let eye: glam::Vec3 = scene_value.parameters.eye_location;
         let direction: glam::Vec3 = scene_value.parameters.eye_direction;
 
@@ -1315,11 +1314,11 @@ fn create_differed_shading_context(
 
 fn update_differed_shading_buffer(
     interface: &WebGPUInterface,
-    scene: &Shared<engine::scene::Scene>,
+    scene: &engine::scene::Scene,
     shadow_resource: &crate::rendering::shadow::WebGPUShadowResource,
     resource: &WebGPUDifferedShadingResource,
 ) {
-    let scene_value = scene.borrow();
+    let scene_value = scene;
 
     let eye: glam::Vec3 = scene_value.parameters.eye_location;
 

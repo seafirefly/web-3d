@@ -4,7 +4,6 @@ use crate::rendering::{
     bloom_shading, composite_shading, differed_shading, forward_shading, hdr_convertion_shading,
     line_grid_shading, shadow, sky_shading,
 };
-use crate::types::Shared;
 use wasm_bindgen::JsCast;
 use wgpu::util::DeviceExt;
 
@@ -236,9 +235,9 @@ pub fn create_shader_context(interface: &WebGPUInterface, name: &str) -> WebGPUS
 /// Main rendering function. It is called in each frame and updates rendering resources and executes render pass.
 pub fn update_rendering_main(
     interface: &WebGPUInterface,
-    scene: &Shared<engine::scene::Scene>,
+    scene: &engine::scene::Scene,
     shader_map: &mut std::collections::HashMap<std::string::String, WebGPUShaderContext>,
-    global_resources: &mut Shared<WebGPUUniqueResources>,
+    global_resources: &mut WebGPUUniqueResources,
 ) {
     let frame: wgpu::SurfaceTexture = interface
         .surface
@@ -249,6 +248,7 @@ pub fn update_rendering_main(
         .texture
         .create_view(&wgpu::TextureViewDescriptor::default());
 
+    // intermediate_view: scene HDR (main), intermediate_view_2: scratch target for post-process passes
     let intermediate_view = interface
         .intermediate_texture
         .create_view(&wgpu::TextureViewDescriptor::default());
@@ -264,114 +264,101 @@ pub fn update_rendering_main(
                 label: Some("Main command encoder"),
             });
 
-    shadow::shadow_pass(
-        &interface,
-        &scene,
-        &mut main_command_encoder,
-        &mut global_resources.borrow_mut(),
-    );
+    shadow::shadow_pass(interface, scene, &mut main_command_encoder, global_resources);
 
-    // HDR conversion pass
-    if scene.borrow().parameters.is_use_sky_box {
+    if scene.parameters.is_use_sky_box {
         hdr_convertion_shading::hdr_convertion_pass(
-            &interface,
-            &scene,
+            interface,
+            scene,
             &mut main_command_encoder,
-            &intermediate_view,
-            &mut global_resources.borrow_mut(),
+            global_resources,
         );
     }
 
-    // Base pass (forward or differed)
-    {
-        let shading_type: engine::scene::ShadingType = scene.borrow().parameters.scene_shading_type;
-        match shading_type {
-            engine::scene::ShadingType::Forward => {
-                forward_shading::forward_shading_pass(
-                    &interface,
-                    &scene,
-                    shader_map,
-                    &mut main_command_encoder,
-                    &intermediate_view,
-                    &mut global_resources.borrow_mut(),
-                );
-            }
+    match scene.parameters.scene_shading_type {
+        engine::scene::ShadingType::Forward => {
+            forward_shading::forward_shading_pass(
+                interface,
+                scene,
+                shader_map,
+                &mut main_command_encoder,
+                &intermediate_view,
+                global_resources,
+            );
+        }
 
-            engine::scene::ShadingType::Differed => {
-                differed_shading::differed_shading_pass(
-                    &interface,
-                    &scene,
-                    shader_map,
-                    &mut main_command_encoder,
-                    &intermediate_view,
-                    &mut global_resources.borrow_mut(),
-                );
-            }
+        engine::scene::ShadingType::Differed => {
+            differed_shading::differed_shading_pass(
+                interface,
+                scene,
+                shader_map,
+                &mut main_command_encoder,
+                &intermediate_view,
+                global_resources,
+            );
         }
     }
 
-    // HDR sky pass
-    if scene.borrow().parameters.is_use_sky_box {
+    if scene.parameters.is_use_sky_box {
         sky_shading::sky_pass(
-            &interface,
-            &scene,
+            interface,
+            scene,
             &mut main_command_encoder,
-            &intermediate_view,
-            &mut global_resources.borrow_mut(),
+            global_resources,
         );
-
-        main_command_encoder.copy_texture_to_texture(
-            interface.intermediate_texture_2.as_image_copy(),
-            interface.intermediate_texture.as_image_copy(),
-            interface.intermediate_texture.size(),
-        );
+        copy_intermediate_2_to_main(interface, &mut main_command_encoder);
     }
 
     // [Post-process] Bloom pass
-    if scene.borrow().parameters.is_use_bloom {
+    if scene.parameters.is_use_bloom {
         bloom_shading::bloom_pass(
-            &interface,
-            &scene,
+            interface,
+            scene,
             &mut main_command_encoder,
             &intermediate_view_2,
-            &mut global_resources.borrow_mut(),
+            global_resources,
         );
-
-        main_command_encoder.copy_texture_to_texture(
-            interface.intermediate_texture_2.as_image_copy(),
-            interface.intermediate_texture.as_image_copy(),
-            interface.intermediate_texture.size(),
-        );
+        copy_intermediate_2_to_main(interface, &mut main_command_encoder);
     }
 
     // [Post-process] Composite pass
-    if scene.borrow().parameters.is_use_composite {
+    if scene.parameters.is_use_composite {
         composite_shading::composite_pass(
-            &interface,
-            &scene,
+            interface,
+            scene,
             &mut main_command_encoder,
             &swapchain_view,
-            &mut global_resources.borrow_mut(),
+            global_resources,
         );
     }
 
     // [Overlay] Line grid UI shading
-    {
-        if scene.borrow().parameters.is_use_grid {
-            line_grid_shading::line_grid_pass(
-                &interface,
-                &scene,
-                &mut main_command_encoder,
-                &swapchain_view,
-                &mut global_resources.borrow_mut(),
-            );
-        }
+    if scene.parameters.is_use_grid {
+        line_grid_shading::line_grid_pass(
+            interface,
+            scene,
+            &mut main_command_encoder,
+            &swapchain_view,
+            global_resources,
+        );
     }
 
     interface
         .queue
         .submit(std::iter::once(main_command_encoder.finish()));
     frame.present();
+}
+
+/// Copies the scratch HDR target (intermediate_texture_2) back into the main HDR target (intermediate_texture).
+fn copy_intermediate_2_to_main(
+    interface: &WebGPUInterface,
+    command_encoder: &mut wgpu::CommandEncoder,
+) {
+    command_encoder.copy_texture_to_texture(
+        interface.intermediate_texture_2.as_image_copy(),
+        interface.intermediate_texture.as_image_copy(),
+        interface.intermediate_texture.size(),
+    );
 }
 
 // Utils --------------------------------------------------------------------------------------

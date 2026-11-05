@@ -2,15 +2,13 @@ use wgpu::util::DeviceExt;
 
 use crate::engine::{self};
 use crate::rendering::webgpu::{WebGPUInterface, WebGPUUniqueResources};
-use crate::Shared;
 
 // HDR conversion pass --------------------------------------------------------------------------------------
 
 pub fn hdr_convertion_pass(
     interface: &WebGPUInterface,
-    _scene: &Shared<engine::scene::Scene>,
+    _scene: &engine::scene::Scene,
     command_encoder: &mut wgpu::CommandEncoder,
-    _view: &wgpu::TextureView,
     global_resources: &mut WebGPUUniqueResources,
 ) {
     // Create sky shader resource and convert HDR to cube texture on the first update

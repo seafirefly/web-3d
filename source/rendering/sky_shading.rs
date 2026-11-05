@@ -1,15 +1,13 @@
 use crate::engine::{self, constant};
 use crate::rendering::webgpu::{WebGPUInterface, WebGPUUniqueResources};
-use crate::Shared;
 use wasm_bindgen::JsCast;
 
 // sky shading pass --------------------------------------------------------------------------------------
 
 pub fn sky_pass(
     interface: &WebGPUInterface,
-    scene: &Shared<engine::scene::Scene>,
+    scene: &engine::scene::Scene,
     command_encoder: &mut wgpu::CommandEncoder,
-    _view: &wgpu::TextureView,
     global_resources: &mut WebGPUUniqueResources,
 ) {
     let is_sky_enable = global_resources.hdr_convertion_resource.is_some();
@@ -26,7 +24,7 @@ pub fn sky_pass(
 
     update_sky_shader_resource(
         &interface,
-        &scene,
+        scene,
         global_resources.sky_shading_resource.as_ref().unwrap(),
     );
 
@@ -197,7 +195,7 @@ fn create_sky_shader_resource(
 
 fn update_sky_shader_resource(
     interface: &WebGPUInterface,
-    scene: &Shared<engine::scene::Scene>,
+    scene: &engine::scene::Scene,
     sky_shader_resource: &WebGPUSkyShadingResource,
 ) {
     let canvas: web_sys::Element = gloo::utils::document()
@@ -208,10 +206,8 @@ fn update_sky_shader_resource(
     let height: u32 = canvas.client_height() as u32;
     let aspect_ratio: f32 = width as f32 / height as f32;
 
-    let scene_value = scene.borrow();
-
-    let eye: glam::Vec3 = scene_value.parameters.eye_location;
-    let direction: glam::Vec3 = scene_value.parameters.eye_direction;
+    let eye: glam::Vec3 = scene.parameters.eye_location;
+    let direction: glam::Vec3 = scene.parameters.eye_direction;
 
     let inv_view_matrix = glam::Mat4::look_to_rh(eye, direction, glam::Vec3::Z).inverse();
     let inv_projection_matrix: glam::Mat4 =

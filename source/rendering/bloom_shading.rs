@@ -3,14 +3,13 @@ use crate::engine::constant;
 use crate::rendering::webgpu::{
     WebGPUInterface, WebGPUUniqueResources, WEBGPU_CULL_MODE, WEBGPU_FRONT_FACE,
 };
-use crate::Shared;
 use wasm_bindgen::JsCast;
 
 // bloom shading pass --------------------------------------------------------------------------------------
 
 pub fn bloom_pass(
     interface: &WebGPUInterface,
-    scene: &Shared<engine::scene::Scene>,
+    scene: &engine::scene::Scene,
     command_encoder: &mut wgpu::CommandEncoder,
     view: &wgpu::TextureView,
     global_resources: &mut WebGPUUniqueResources,
@@ -19,7 +18,7 @@ pub fn bloom_pass(
         global_resources.bloom_shading_resource = Some(create_bloom_shader_resource(&interface));
     }
 
-    update_bloom_uniform_buffer(&interface, &scene, global_resources);
+    update_bloom_uniform_buffer(&interface, scene, global_resources);
 
     // Extraction pass (intermidate 1 -> intermediate 2)
     {
@@ -840,10 +839,10 @@ fn create_bloom_shader_resource(interface: &WebGPUInterface) -> WebGPUbloomShadi
 
 fn update_bloom_uniform_buffer(
     interface: &WebGPUInterface,
-    scene: &Shared<engine::scene::Scene>,
+    scene: &engine::scene::Scene,
     global_resources: &mut WebGPUUniqueResources,
 ) {
-    let bloom_threshold: f32 = scene.borrow().parameters.bloom_threshold;
+    let bloom_threshold: f32 = scene.parameters.bloom_threshold;
 
     interface.queue.write_buffer(
         &global_resources
