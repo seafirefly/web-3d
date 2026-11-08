@@ -2,6 +2,7 @@ use crate::engine;
 use crate::engine::constant;
 use crate::rendering::common;
 use crate::rendering::webgpu;
+use crate::rendering::gpu_profiler::GpuPassGroup;
 use crate::rendering::webgpu::{
     WebGPUInterface, WebGPUShaderContext, WebGPUUniqueResources, WEBGPU_CULL_MODE,
     WEBGPU_DEPTH_FORMAT,
@@ -149,7 +150,9 @@ pub fn differed_shading_pass(
                         }),
                         stencil_ops: None,
                     }),
-                    timestamp_writes: None,
+                    timestamp_writes: interface
+                        .gpu_profiler
+                        .timestamp_writes(GpuPassGroup::BasePass),
                     occlusion_query_set: None,
                 });
 
@@ -246,7 +249,9 @@ pub fn differed_shading_pass(
                         },
                     })],
                     depth_stencil_attachment: None,
-                    timestamp_writes: None,
+                    timestamp_writes: interface
+                        .gpu_profiler
+                        .timestamp_writes(GpuPassGroup::Lighting),
                     occlusion_query_set: None,
                 });
 

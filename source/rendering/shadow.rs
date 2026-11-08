@@ -1,6 +1,7 @@
 use crate::engine;
 use crate::engine::constant;
 use crate::rendering::common;
+use crate::rendering::gpu_profiler::GpuPassGroup;
 use crate::rendering::webgpu::{WebGPUInterface, WebGPUUniqueResources, WEBGPU_CULL_MODE};
 
 pub const SHADOW_MAP_SIZE: u32 = 4096;
@@ -44,7 +45,7 @@ pub fn shadow_pass(
             }),
             stencil_ops: None,
         }),
-        timestamp_writes: None,
+        timestamp_writes: interface.gpu_profiler.timestamp_writes(GpuPassGroup::Shadow),
         occlusion_query_set: None,
     });
 

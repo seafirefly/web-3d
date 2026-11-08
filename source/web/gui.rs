@@ -1,6 +1,7 @@
 mod widgets;
 
 use crate::engine::scene::{CompositeViewTransform, Scene, ShadingType, ToneMappingType};
+use crate::rendering::gpu_profiler::{GpuPassGroup, GpuTimings};
 use crate::types::Shared;
 use widgets::*;
 
@@ -86,6 +87,36 @@ fn update_statistic(id: &str, value: &str) {
         .get_element_by_id(id)
         .expect("Performance statistic element should exist")
         .set_text_content(Some(value));
+}
+
+/// Updates GPU pass timings. `timings` is `None` until the first readback completes.
+pub fn update_gpu_statistics(supported: bool, timings: Option<GpuTimings>) {
+    if !supported {
+        for index in 0..GpuPassGroup::ALL.len() {
+            update_statistic(&gpu_pass_row_id(index), "N/A");
+        }
+        update_statistic(GPU_TOTAL_ROW_ID, "N/A");
+        return;
+    }
+
+    for index in 0..GpuPassGroup::ALL.len() {
+        let text = match timings.and_then(|t| t.group_ms[index]) {
+            Some(ms) => format!("{ms:.2} ms"),
+            None => "-".to_string(),
+        };
+        update_statistic(&gpu_pass_row_id(index), &text);
+    }
+    let total = match timings {
+        Some(t) => format!("{:.2} ms", t.total_ms),
+        None => "-".to_string(),
+    };
+    update_statistic(GPU_TOTAL_ROW_ID, &total);
+}
+
+const GPU_TOTAL_ROW_ID: &str = "gpu-total-analytics-value";
+
+fn gpu_pass_row_id(index: usize) -> String {
+    format!("gpu-pass-{index}-analytics-value")
 }
 
 fn environment(parent: &web_sys::Element, scene: &Shared<Scene>) {
@@ -443,4 +474,15 @@ fn performance(parent: &web_sys::Element) {
         &content,
         &stat_row("Processing load", "processing-load-analytics-value", 0),
     );
+    for (index, group) in GpuPassGroup::ALL.iter().enumerate() {
+        append(
+            &content,
+            &stat_row(
+                &format!("GPU {}", group.label()),
+                &gpu_pass_row_id(index),
+                0,
+            ),
+        );
+    }
+    append(&content, &stat_row("GPU total", GPU_TOTAL_ROW_ID, 0));
 }

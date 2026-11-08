@@ -1,4 +1,5 @@
 use crate::engine::{self, constant};
+use crate::rendering::gpu_profiler::GpuPassGroup;
 use crate::rendering::webgpu::{WebGPUInterface, WebGPUUniqueResources};
 use wasm_bindgen::JsCast;
 
@@ -43,7 +44,7 @@ pub fn sky_pass(
                 },
             })],
             depth_stencil_attachment: None,
-            timestamp_writes: None,
+            timestamp_writes: interface.gpu_profiler.timestamp_writes(GpuPassGroup::Sky),
             occlusion_query_set: None,
         });
 

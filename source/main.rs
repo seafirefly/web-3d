@@ -28,13 +28,13 @@ impl PerformanceMetrics {
         }
     }
 
-    fn record_frame(&mut self, frame_time_ms: f64, now: f64) {
+    fn record_frame(&mut self, frame_time_ms: f64, now: f64) -> bool {
         self.total_frame_time_ms += frame_time_ms;
         self.frame_count += 1;
 
         let sample_duration_ms = now - self.sample_started_at;
         if sample_duration_ms < PERFORMANCE_SAMPLE_INTERVAL_MS {
-            return;
+            return false;
         }
 
         let average_frame_time_ms = self.total_frame_time_ms / self.frame_count as f64;
@@ -49,6 +49,7 @@ impl PerformanceMetrics {
         self.sample_started_at = now;
         self.total_frame_time_ms = 0.0;
         self.frame_count = 0;
+        true
     }
 }
 
@@ -160,7 +161,13 @@ pub async fn main() {
             debug_log_with_time("Render OK");
         }
         let frame_finished_at = performance.now();
-        performance_metrics.record_frame(frame_finished_at - frame_started_at, frame_finished_at);
+        if performance_metrics.record_frame(frame_finished_at - frame_started_at, frame_finished_at)
+        {
+            web::gui::update_gpu_statistics(
+                webgpu_interface.gpu_profiler.is_supported(),
+                webgpu_interface.gpu_profiler.latest_timings(),
+            );
+        }
         request_animation_frame(f.borrow().as_ref().unwrap());
     })
         as Box<dyn FnMut()>));

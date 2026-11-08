@@ -1,8 +1,8 @@
 use crate::engine::{self, constant};
 use crate::rendering::common;
 use crate::rendering::{
-    bloom_shading, composite_shading, differed_shading, forward_shading, hdr_convertion_shading,
-    line_grid_shading, shadow, sky_shading,
+    bloom_shading, composite_shading, differed_shading, forward_shading, gpu_profiler,
+    hdr_convertion_shading, line_grid_shading, shadow, sky_shading,
 };
 use wasm_bindgen::JsCast;
 use wgpu::util::DeviceExt;
@@ -24,6 +24,7 @@ pub struct WebGPUInterface<'a> {
     pub intermediate_texture: wgpu::Texture,
     pub intermediate_texture_2: wgpu::Texture,
     pub sky_hdr_texture: wgpu::Texture,
+    pub gpu_profiler: gpu_profiler::GpuProfiler,
 }
 
 /// shader resource contains shader module and pipeline layout. It is shared between objects.
@@ -100,11 +101,18 @@ pub async fn init_interface<'a>() -> WebGPUInterface<'a> {
         .await
         .expect("Failed to request adapter");
 
+    let timestamp_supported: bool = adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY);
+    let required_features: wgpu::Features = if timestamp_supported {
+        wgpu::Features::TIMESTAMP_QUERY
+    } else {
+        wgpu::Features::empty()
+    };
+
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                required_features: wgpu::Features::empty(),
+                required_features,
                 required_limits: wgpu::Limits::default(),
                 memory_hints: wgpu::MemoryHints::default(),
             },
@@ -203,6 +211,8 @@ pub async fn init_interface<'a>() -> WebGPUInterface<'a> {
         bytemuck::cast_slice(&sky_hdr_data),
     );
 
+    let gpu_profiler = gpu_profiler::GpuProfiler::new(&device, &queue, timestamp_supported);
+
     // Return webgpu resource
 
     let interface: WebGPUInterface<'_> = WebGPUInterface {
@@ -215,6 +225,7 @@ pub async fn init_interface<'a>() -> WebGPUInterface<'a> {
         intermediate_texture,
         intermediate_texture_2,
         sky_hdr_texture,
+        gpu_profiler,
     };
 
     return interface;
@@ -239,6 +250,8 @@ pub fn update_rendering_main(
     shader_map: &mut std::collections::HashMap<std::string::String, WebGPUShaderContext>,
     global_resources: &mut WebGPUUniqueResources,
 ) {
+    interface.gpu_profiler.begin_frame();
+
     let frame: wgpu::SurfaceTexture = interface
         .surface
         .get_current_texture()
@@ -343,9 +356,11 @@ pub fn update_rendering_main(
         );
     }
 
+    interface.gpu_profiler.resolve(&mut main_command_encoder);
     interface
         .queue
         .submit(std::iter::once(main_command_encoder.finish()));
+    interface.gpu_profiler.request_readback();
     frame.present();
 }
 

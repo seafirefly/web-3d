@@ -1,5 +1,6 @@
 use crate::engine;
 use crate::engine::constant;
+use crate::rendering::gpu_profiler::GpuPassGroup;
 use crate::rendering::webgpu::{
     WebGPUInterface, WebGPUUniqueResources, WEBGPU_CULL_MODE, WEBGPU_FRONT_FACE,
 };
@@ -40,7 +41,7 @@ pub fn line_grid_pass(
                 },
             })],
             depth_stencil_attachment: None,
-            timestamp_writes: None,
+            timestamp_writes: interface.gpu_profiler.timestamp_writes(GpuPassGroup::LineGrid),
             occlusion_query_set: None,
         });
 

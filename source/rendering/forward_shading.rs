@@ -1,6 +1,7 @@
 use crate::engine;
 use crate::engine::constant;
 use crate::rendering::common;
+use crate::rendering::gpu_profiler::GpuPassGroup;
 use crate::rendering::shadow;
 use crate::rendering::webgpu::{
     WebGPUInterface, WebGPUShaderContext, WebGPUUniqueResources, WEBGPU_CULL_MODE,
@@ -76,7 +77,7 @@ pub fn forward_shading_pass(
                 }),
                 stencil_ops: None,
             }),
-            timestamp_writes: None,
+            timestamp_writes: interface.gpu_profiler.timestamp_writes(GpuPassGroup::BasePass),
             occlusion_query_set: None,
         });
 
