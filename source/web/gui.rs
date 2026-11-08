@@ -66,7 +66,7 @@ pub fn create_frontend_gui(scene: &Shared<Scene>) {
 pub fn update_performance_statistics(
     average_frame_time_ms: f64,
     frames_per_second: f64,
-    processing_load_percent: f64,
+    cpu_busy_percent: f64,
 ) {
     update_statistic(
         "frame-time-analytics-value",
@@ -77,8 +77,8 @@ pub fn update_performance_statistics(
         &format!("{frames_per_second:.1} FPS"),
     );
     update_statistic(
-        "processing-load-analytics-value",
-        &format!("{processing_load_percent:.1}%"),
+        "cpu-busy-analytics-value",
+        &format!("{cpu_busy_percent:.1}%"),
     );
 }
 
@@ -495,7 +495,7 @@ fn performance(parent: &web_sys::Element) {
     append(&content, &stat_row("FPS", "fps-analytics-value", 0));
     append(
         &content,
-        &stat_row("Processing load", "processing-load-analytics-value", 0),
+        &stat_row("CPU busy", "cpu-busy-analytics-value", 0),
     );
     let cpu = accordion(&content, "performance-cpu", "CPU", true);
     for (index, group) in GpuPassGroup::ALL.iter().enumerate() {

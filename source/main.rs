@@ -36,11 +36,11 @@ impl PerformanceMetrics {
 
         let average_frame_time_ms = self.total_frame_time_ms / self.frame_count as f64;
         let frames_per_second = self.frame_count as f64 * 1000.0 / sample_duration_ms;
-        let processing_load_percent = self.total_frame_time_ms * 100.0 / sample_duration_ms;
+        let cpu_busy_percent = self.total_frame_time_ms * 100.0 / sample_duration_ms;
         web::gui::update_performance_statistics(
             average_frame_time_ms,
             frames_per_second,
-            processing_load_percent,
+            cpu_busy_percent,
         );
 
         self.sample_started_at = now;
