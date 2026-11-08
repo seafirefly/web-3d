@@ -1,5 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::sync::{Arc, Mutex};
+use web_time::Instant;
 
 // Each render pass records one begin/end timestamp pair (2 x u64 = 16 bytes).
 const MAX_PASSES: u32 = 64;
@@ -53,11 +54,82 @@ pub struct GpuTimings {
     pub total_ms: f64,
 }
 
+/// CPU time spent encoding each pass group in milliseconds, averaged over the frames since the last read.
+/// `None` means the group did not run in any of those frames.
+#[derive(Clone, Copy)]
+pub struct CpuTimings {
+    pub group_ms: [Option<f64>; GROUP_COUNT],
+    pub total_ms: f64,
+}
+
 /// Measures GPU time of render passes with timestamp queries.
 /// Results are read back asynchronously, so they arrive a few frames after the measured frame.
-/// When TIMESTAMP_QUERY is unsupported, every method is a no-op.
+/// When TIMESTAMP_QUERY is unsupported, GPU timings are unavailable but CPU timings are still measured.
 pub struct GpuProfiler {
     state: Option<ProfilerState>,
+    cpu: RefCell<CpuAccumulator>,
+}
+
+/// Measures the CPU time of one pass group's encoding. The time is added when the scope is dropped.
+pub struct CpuPassScope<'a> {
+    cpu: &'a RefCell<CpuAccumulator>,
+    group: GpuPassGroup,
+    started_at: Instant,
+}
+
+#[derive(Default)]
+struct CpuAccumulator {
+    frame_ms: [Option<f64>; GROUP_COUNT],
+    group_sum_ms: [f64; GROUP_COUNT],
+    group_frames: [u32; GROUP_COUNT],
+    total_sum_ms: f64,
+    frames: u32,
+    latest: Option<CpuTimings>,
+}
+
+impl CpuAccumulator {
+    /// Moves the finished frame's CPU times into the running sums.
+    fn finish_frame(&mut self) {
+        let mut frame_total_ms = 0.0;
+        for index in 0..GROUP_COUNT {
+            if let Some(ms) = self.frame_ms[index].take() {
+                self.group_sum_ms[index] += ms;
+                self.group_frames[index] += 1;
+                frame_total_ms += ms;
+            }
+        }
+        self.total_sum_ms += frame_total_ms;
+        self.frames += 1;
+    }
+
+    fn take_timings(&mut self) -> Option<CpuTimings> {
+        if self.frames > 0 {
+            let mut group_ms = [None; GROUP_COUNT];
+            for (index, slot) in group_ms.iter_mut().enumerate() {
+                if self.group_frames[index] > 0 {
+                    *slot = Some(self.group_sum_ms[index] / self.group_frames[index] as f64);
+                }
+            }
+            self.latest = Some(CpuTimings {
+                group_ms,
+                total_ms: self.total_sum_ms / self.frames as f64,
+            });
+            self.group_sum_ms = [0.0; GROUP_COUNT];
+            self.group_frames = [0; GROUP_COUNT];
+            self.total_sum_ms = 0.0;
+            self.frames = 0;
+        }
+        self.latest
+    }
+}
+
+impl Drop for CpuPassScope<'_> {
+    fn drop(&mut self) {
+        let ms = self.started_at.elapsed().as_secs_f64() * 1000.0;
+        let mut cpu = self.cpu.borrow_mut();
+        let slot = &mut cpu.frame_ms[self.group.index()];
+        *slot = Some(slot.unwrap_or(0.0) + ms);
+    }
 }
 
 struct ProfilerState {
@@ -80,8 +152,9 @@ struct PendingReadback {
 
 impl GpuProfiler {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, supported: bool) -> Self {
+        let cpu = RefCell::new(CpuAccumulator::default());
         if !supported {
-            return Self { state: None };
+            return Self { state: None, cpu };
         }
 
         let query_set = device.create_query_set(&wgpu::QuerySetDescriptor {
@@ -115,6 +188,7 @@ impl GpuProfiler {
                 readback: RefCell::new(None),
                 latest: Cell::new(None),
             }),
+            cpu,
         }
     }
 
@@ -126,8 +200,24 @@ impl GpuProfiler {
         self.state.as_ref()?.latest.get()
     }
 
+    /// Returns CPU encoding times averaged since the previous call. Call it at the same rate as the GUI update.
+    pub fn cpu_timings(&self) -> Option<CpuTimings> {
+        self.cpu.borrow_mut().take_timings()
+    }
+
+    /// Measures the CPU time spent encoding passes of `group` until the returned scope is dropped.
+    /// Create it at the start of the function that encodes the group's passes.
+    pub fn cpu_scope(&self, group: GpuPassGroup) -> CpuPassScope<'_> {
+        CpuPassScope {
+            cpu: &self.cpu,
+            group,
+            started_at: Instant::now(),
+        }
+    }
+
     /// Call at the start of a frame. Collects a finished readback and decides whether this frame is measured.
     pub fn begin_frame(&self) {
+        self.cpu.borrow_mut().finish_frame();
         let Some(state) = self.state.as_ref() else {
             return;
         };

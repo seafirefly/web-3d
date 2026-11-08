@@ -138,7 +138,9 @@ body {
 }
 #frame-time-analytics-value,
 #fps-analytics-value,
-#processing-load-analytics-value {
+#processing-load-analytics-value,
+[id^="gpu-"][id$="-analytics-value"],
+[id^="cpu-"][id$="-analytics-value"] {
 	white-space: nowrap;
 }
 .widget-separator{

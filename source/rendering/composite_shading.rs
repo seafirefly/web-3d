@@ -14,6 +14,7 @@ pub fn composite_pass(
     view: &wgpu::TextureView,
     global_resources: &mut WebGPUUniqueResources,
 ) {
+    let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::Composite);
     if global_resources.composite_shading_resource.is_none() {
         global_resources.composite_shading_resource =
             Some(create_composite_shader_resource(&interface));

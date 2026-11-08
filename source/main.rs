@@ -166,6 +166,7 @@ pub async fn main() {
             web::gui::update_gpu_statistics(
                 webgpu_interface.gpu_profiler.is_supported(),
                 webgpu_interface.gpu_profiler.latest_timings(),
+                webgpu_interface.gpu_profiler.cpu_timings(),
             );
         }
         request_animation_frame(f.borrow().as_ref().unwrap());

@@ -15,6 +15,7 @@ pub fn bloom_pass(
     view: &wgpu::TextureView,
     global_resources: &mut WebGPUUniqueResources,
 ) {
+    let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::Bloom);
     if global_resources.bloom_shading_resource.is_none() {
         global_resources.bloom_shading_resource = Some(create_bloom_shader_resource(&interface));
     }

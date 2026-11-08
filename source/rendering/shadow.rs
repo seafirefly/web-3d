@@ -23,6 +23,7 @@ pub fn shadow_pass(
     command_encoder: &mut wgpu::CommandEncoder,
     global_resources: &mut WebGPUUniqueResources,
 ) {
+    let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::Shadow);
     if global_resources.shadow_resource.is_none() {
         global_resources.shadow_resource = Some(create_shadow_resource(interface));
     }

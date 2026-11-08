@@ -1,7 +1,7 @@
 mod widgets;
 
 use crate::engine::scene::{CompositeViewTransform, Scene, ShadingType, ToneMappingType};
-use crate::rendering::gpu_profiler::{GpuPassGroup, GpuTimings};
+use crate::rendering::gpu_profiler::{CpuTimings, GpuPassGroup, GpuTimings};
 use crate::types::Shared;
 use widgets::*;
 
@@ -90,33 +90,56 @@ fn update_statistic(id: &str, value: &str) {
 }
 
 /// Updates GPU pass timings. `timings` is `None` until the first readback completes.
-pub fn update_gpu_statistics(supported: bool, timings: Option<GpuTimings>) {
+/// CPU encoding timings are shown regardless of GPU timestamp support.
+pub fn update_gpu_statistics(
+    supported: bool,
+    timings: Option<GpuTimings>,
+    cpu_timings: Option<CpuTimings>,
+) {
     if !supported {
         for index in 0..GpuPassGroup::ALL.len() {
             update_statistic(&gpu_pass_row_id(index), "N/A");
         }
         update_statistic(GPU_TOTAL_ROW_ID, "N/A");
-        return;
+    } else {
+        for index in 0..GpuPassGroup::ALL.len() {
+            let text = match timings.and_then(|t| t.group_ms[index]) {
+                Some(ms) => format!("{ms:.2} ms"),
+                None => "-".to_string(),
+            };
+            update_statistic(&gpu_pass_row_id(index), &text);
+        }
+        let total = match timings {
+            Some(t) => format!("{:.2} ms", t.total_ms),
+            None => "-".to_string(),
+        };
+        update_statistic(GPU_TOTAL_ROW_ID, &total);
     }
 
     for index in 0..GpuPassGroup::ALL.len() {
-        let text = match timings.and_then(|t| t.group_ms[index]) {
+        let text = match cpu_timings.and_then(|t| t.group_ms[index]) {
             Some(ms) => format!("{ms:.2} ms"),
             None => "-".to_string(),
         };
-        update_statistic(&gpu_pass_row_id(index), &text);
+        update_statistic(&cpu_pass_row_id(index), &text);
     }
-    let total = match timings {
+    let cpu_total = match cpu_timings {
         Some(t) => format!("{:.2} ms", t.total_ms),
         None => "-".to_string(),
     };
-    update_statistic(GPU_TOTAL_ROW_ID, &total);
+    update_statistic(CPU_TOTAL_ROW_ID, &cpu_total);
 }
 
 const GPU_TOTAL_ROW_ID: &str = "gpu-total-analytics-value";
 
 fn gpu_pass_row_id(index: usize) -> String {
     format!("gpu-pass-{index}-analytics-value")
+}
+
+const CPU_TOTAL_ROW_ID: &str = "cpu-total-analytics-value";
+
+fn cpu_pass_row_id(index: usize) -> String {
+    format!("cpu-pass-{index}-analytics-value")
 }
 
 fn environment(parent: &web_sys::Element, scene: &Shared<Scene>) {
@@ -474,9 +497,23 @@ fn performance(parent: &web_sys::Element) {
         &content,
         &stat_row("Processing load", "processing-load-analytics-value", 0),
     );
+    let cpu = accordion(&content, "performance-cpu", "CPU", true);
     for (index, group) in GpuPassGroup::ALL.iter().enumerate() {
         append(
-            &content,
+            &cpu,
+            &stat_row(
+                &format!("CPU {}", group.label()),
+                &cpu_pass_row_id(index),
+                0,
+            ),
+        );
+    }
+    append(&cpu, &stat_row("CPU total", CPU_TOTAL_ROW_ID, 0));
+
+    let gpu = accordion(&content, "performance-gpu", "GPU", true);
+    for (index, group) in GpuPassGroup::ALL.iter().enumerate() {
+        append(
+            &gpu,
             &stat_row(
                 &format!("GPU {}", group.label()),
                 &gpu_pass_row_id(index),
@@ -484,5 +521,5 @@ fn performance(parent: &web_sys::Element) {
             ),
         );
     }
-    append(&content, &stat_row("GPU total", GPU_TOTAL_ROW_ID, 0));
+    append(&gpu, &stat_row("GPU total", GPU_TOTAL_ROW_ID, 0));
 }

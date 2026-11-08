@@ -59,6 +59,7 @@ pub fn differed_shading_pass(
     {
         // Render differed gbuffer writing pass
         {
+            let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::BasePass);
             let differed_gbuffer_shader_context: &WebGPUShaderContext = &shader_map
                 .get("DifferedGBuffer")
                 .expect("DifferedGBuffer shader is not exist");
@@ -227,6 +228,7 @@ pub fn differed_shading_pass(
 
         // differed shading pass
         {
+            let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::Lighting);
             let scene_value = scene;
             let is_debug_out = scene.parameters.differed_debug_type != 0;
             let is_use_ibl = false; // TODO: Implement IBL

@@ -15,6 +15,7 @@ pub fn line_grid_pass(
     view: &wgpu::TextureView,
     global_resources: &mut WebGPUUniqueResources,
 ) {
+    let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::LineGrid);
     if global_resources.line_grid_shading_resource.is_none() {
         global_resources.line_grid_shading_resource =
             Some(create_line_grid_shader_resource(interface));

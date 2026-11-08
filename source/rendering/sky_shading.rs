@@ -16,6 +16,7 @@ pub fn sky_pass(
         return;
     }
 
+    let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::Sky);
     // Create sky shader resource and convert HDR to cube texture on the first update
     let is_first_update = global_resources.sky_shading_resource.is_none();
     if is_first_update {

@@ -20,6 +20,7 @@ pub fn forward_shading_pass(
     global_resources: &mut WebGPUUniqueResources,
 ) {
     // Update phong resources
+    let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::BasePass);
     {
         let shadow_resource = global_resources.shadow_resource.as_ref().unwrap();
         let light_view_projection = shadow_resource.light_view_projection;
