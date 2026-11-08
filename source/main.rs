@@ -8,9 +8,6 @@ use crate::types::Shared;
 use std::cell::RefCell;
 use wasm_bindgen::JsCast;
 
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
 const PERFORMANCE_SAMPLE_INTERVAL_MS: f64 = 500.0;
 
 struct PerformanceMetrics {
