@@ -57,8 +57,35 @@ pub fn create_frontend_gui(scene: &Shared<Scene>) {
     postprocess(&wrapper, scene);
     overlay(&wrapper, scene);
     statistics(&wrapper, scene);
+    performance(&wrapper);
 
     append(&gloo::utils::body(), &wrapper);
+}
+
+pub fn update_performance_statistics(
+    average_frame_time_ms: f64,
+    frames_per_second: f64,
+    processing_load_percent: f64,
+) {
+    update_statistic(
+        "frame-time-analytics-value",
+        &format!("{average_frame_time_ms:.2} ms"),
+    );
+    update_statistic(
+        "fps-analytics-value",
+        &format!("{frames_per_second:.1} FPS"),
+    );
+    update_statistic(
+        "processing-load-analytics-value",
+        &format!("{processing_load_percent:.1}%"),
+    );
+}
+
+fn update_statistic(id: &str, value: &str) {
+    gloo::utils::document()
+        .get_element_by_id(id)
+        .expect("Performance statistic element should exist")
+        .set_text_content(Some(value));
 }
 
 fn environment(parent: &web_sys::Element, scene: &Shared<Scene>) {
@@ -401,5 +428,19 @@ fn statistics(parent: &web_sys::Element, scene: &Shared<Scene>) {
     append(
         &content,
         &stat_row("Materials", "materials-analytics-value", materials),
+    );
+}
+
+fn performance(parent: &web_sys::Element) {
+    let content = dialog(parent, "performance", "Performance");
+
+    append(
+        &content,
+        &stat_row("Frame time", "frame-time-analytics-value", 0),
+    );
+    append(&content, &stat_row("FPS", "fps-analytics-value", 0));
+    append(
+        &content,
+        &stat_row("Processing load", "processing-load-analytics-value", 0),
     );
 }

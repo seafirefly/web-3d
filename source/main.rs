@@ -11,6 +11,47 @@ use wasm_bindgen::JsCast;
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
+const PERFORMANCE_SAMPLE_INTERVAL_MS: f64 = 500.0;
+
+struct PerformanceMetrics {
+    sample_started_at: f64,
+    total_frame_time_ms: f64,
+    frame_count: u32,
+}
+
+impl PerformanceMetrics {
+    fn new(now: f64) -> Self {
+        Self {
+            sample_started_at: now,
+            total_frame_time_ms: 0.0,
+            frame_count: 0,
+        }
+    }
+
+    fn record_frame(&mut self, frame_time_ms: f64, now: f64) {
+        self.total_frame_time_ms += frame_time_ms;
+        self.frame_count += 1;
+
+        let sample_duration_ms = now - self.sample_started_at;
+        if sample_duration_ms < PERFORMANCE_SAMPLE_INTERVAL_MS {
+            return;
+        }
+
+        let average_frame_time_ms = self.total_frame_time_ms / self.frame_count as f64;
+        let frames_per_second = self.frame_count as f64 * 1000.0 / sample_duration_ms;
+        let processing_load_percent = self.total_frame_time_ms * 100.0 / sample_duration_ms;
+        web::gui::update_performance_statistics(
+            average_frame_time_ms,
+            frames_per_second,
+            processing_load_percent,
+        );
+
+        self.sample_started_at = now;
+        self.total_frame_time_ms = 0.0;
+        self.frame_count = 0;
+    }
+}
+
 #[wasm_bindgen::prelude::wasm_bindgen(main)]
 pub async fn main() {
     console_error_panic_hook::set_once();
@@ -95,9 +136,16 @@ pub async fn main() {
     web::gui::create_frontend_gui(&scene);
 
     // Rendering loop
+    // Fetch the Performance object once, since looking it up from window every frame is costly.
+    let performance: web_sys::Performance = web_sys::window()
+        .expect("should have a Window")
+        .performance()
+        .expect("should have a Performance");
+    let mut performance_metrics = PerformanceMetrics::new(performance.now());
     let f: Shared<Option<_>> = Shared::new(RefCell::new(None));
     let g: Shared<Option<_>> = f.clone();
     *g.borrow_mut() = Some(wasm_bindgen::closure::Closure::wrap(Box::new(move || {
+        let frame_started_at = performance.now();
         engine::scene::update_camera_control(&scene, &control_response_js);
 
         rendering::webgpu::update_rendering_main(
@@ -111,12 +159,22 @@ pub async fn main() {
             scene.borrow_mut().parameters.is_first_update = false;
             debug_log_with_time("Render OK");
         }
+        let frame_finished_at = performance.now();
+        performance_metrics.record_frame(frame_finished_at - frame_started_at, frame_finished_at);
         request_animation_frame(f.borrow().as_ref().unwrap());
     })
         as Box<dyn FnMut()>));
     request_animation_frame(g.borrow().as_ref().unwrap());
 
     debug_log_with_time("Main end");
+}
+
+fn performance_now() -> f64 {
+    web_sys::window()
+        .expect("should have a Window")
+        .performance()
+        .expect("should have a Performance")
+        .now()
 }
 
 fn request_animation_frame(f: &wasm_bindgen::closure::Closure<dyn FnMut()>) {
@@ -132,11 +190,7 @@ pub fn debug_log_with_time(message: &str) {
     if enable_log {
         log::debug!(
             "{:.2} ms : {}",
-            web_sys::window()
-                .expect("should have a Window")
-                .performance()
-                .expect("should have a Performance")
-                .now(),
+            performance_now(),
             message
         );
     }

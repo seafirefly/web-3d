@@ -24,7 +24,7 @@ pub fn forward_shading_pass(
         let light_view_projection = shadow_resource.light_view_projection;
         let phong_shader_context: &WebGPUShaderContext = &shader_map
             .entry("Phong".to_string())
-            .or_insert(create_phong_shader_context(&interface, shadow_resource));
+            .or_insert_with(|| create_phong_shader_context(&interface, shadow_resource));
 
         for scene_object in scene.objects.iter() {
             if scene_object.mesh_rendering_resource.is_some() {

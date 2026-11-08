@@ -136,6 +136,11 @@ body {
 .widget-value{
 	width: calc(100% / 2);
 }
+#frame-time-analytics-value,
+#fps-analytics-value,
+#processing-load-analytics-value {
+	white-space: nowrap;
+}
 .widget-separator{
 	height: 1px;
 	margin: 5px;

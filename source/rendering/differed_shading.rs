@@ -22,7 +22,7 @@ pub fn differed_shading_pass(
     {
         let differed_gbuffer_shader: &WebGPUShaderContext = &shader_map
             .entry("DifferedGBuffer".to_string())
-            .or_insert(webgpu::create_shader_context(&interface, "DifferedGBuffer"));
+            .or_insert_with(|| webgpu::create_shader_context(&interface, "DifferedGBuffer"));
 
         for scene_object in scene.objects.iter() {
             if scene_object.mesh_rendering_resource.is_some() {
