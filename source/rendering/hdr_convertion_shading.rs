@@ -1,6 +1,6 @@
 use wgpu::util::DeviceExt;
 
-use crate::engine::{self};
+use crate::engine::{self, constant};
 use crate::rendering::webgpu::{WebGPUInterface, WebGPUUniqueResources};
 
 // HDR conversion pass --------------------------------------------------------------------------------------
@@ -14,8 +14,31 @@ pub fn hdr_convertion_pass(
     // Create sky shader resource and convert HDR to cube texture on the first update
     let is_first_update = global_resources.hdr_convertion_resource.is_none();
     if is_first_update {
-        global_resources.hdr_convertion_resource =
-            Some(create_hdr_conversion_shader_resource(&interface));
+        // The HDR file is loaded asynchronously on the first update. Conversion starts once it is ready.
+        if !global_resources.sky_hdr_load_started {
+            global_resources.sky_hdr_load_started = true;
+            let sky_hdr_image = global_resources.sky_hdr_image.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let (data, width, height) =
+                    engine::load::load_hdr_file(constant::HDR_KLOPPENHEIM_02).await;
+                *sky_hdr_image.borrow_mut() = Some(SkyHdrImage {
+                    data,
+                    width,
+                    height,
+                });
+            });
+            return;
+        }
+
+        let sky_hdr_image_cell = global_resources.sky_hdr_image.clone();
+        let sky_hdr_image_ref = sky_hdr_image_cell.borrow();
+        let Some(sky_hdr_image) = sky_hdr_image_ref.as_ref() else {
+            return;
+        };
+        global_resources.hdr_convertion_resource = Some(create_hdr_conversion_shader_resource(
+            &interface,
+            sky_hdr_image,
+        ));
 
         // Convert hdr to cube pass
         {
@@ -119,8 +142,15 @@ pub fn hdr_convertion_pass(
 }
 
 // HDR conversion shader resource creation and update functions ----------------------------------------------------------------------------
+pub struct SkyHdrImage {
+    pub data: Vec<half::f16>,
+    pub width: u32,
+    pub height: u32,
+}
+
 pub struct WebGPUHDREnvironmentResource {
     pub _shader: wgpu::ShaderModule,
+    pub _sky_hdr_texture: wgpu::Texture,
     pub hdr_cube_texture: wgpu::Texture,
     pub irradiance_map: wgpu::Texture,
     pub prefilter_map: wgpu::Texture,
@@ -135,6 +165,7 @@ pub struct WebGPUHDREnvironmentResource {
 
 fn create_hdr_conversion_shader_resource(
     interface: &WebGPUInterface,
+    sky_hdr_image: &SkyHdrImage,
 ) -> WebGPUHDREnvironmentResource {
     let shader: wgpu::ShaderModule =
         interface
@@ -146,13 +177,32 @@ fn create_hdr_conversion_shader_resource(
                 ))),
             });
 
-    let hdr_texture_view = interface.sky_hdr_texture.create_view(&Default::default());
+    let sky_hdr_texture = interface.device.create_texture_with_data(
+        &interface.queue,
+        &wgpu::TextureDescriptor {
+            label: Some("Sky HDR Texture"),
+            size: wgpu::Extent3d {
+                width: sky_hdr_image.width,
+                height: sky_hdr_image.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        },
+        wgpu::util::TextureDataOrder::default(),
+        bytemuck::cast_slice(&sky_hdr_image.data),
+    );
+    let hdr_texture_view = sky_hdr_texture.create_view(&Default::default());
 
     let hdr_cube_texture = interface.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Cube Target"),
         size: wgpu::Extent3d {
-            width: interface.sky_hdr_texture.height() / 2,
-            height: interface.sky_hdr_texture.height() / 2,
+            width: sky_hdr_image.height / 2,
+            height: sky_hdr_image.height / 2,
             depth_or_array_layers: 6,
         },
         mip_level_count: 1,
@@ -407,6 +457,7 @@ fn create_hdr_conversion_shader_resource(
 
     return WebGPUHDREnvironmentResource {
         _shader: shader,
+        _sky_hdr_texture: sky_hdr_texture,
         hdr_cube_texture,
         irradiance_map,
         prefilter_map,

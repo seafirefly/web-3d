@@ -4,6 +4,7 @@ use crate::rendering::{
     bloom_shading, composite_shading, differed_shading, forward_shading, gpu_profiler,
     hdr_convertion_shading, line_grid_shading, shadow, sky_shading,
 };
+use crate::types::Shared;
 use wasm_bindgen::JsCast;
 use wgpu::util::DeviceExt;
 
@@ -23,7 +24,6 @@ pub struct WebGPUInterface<'a> {
     pub depth_texture: wgpu::Texture,
     pub intermediate_texture: wgpu::Texture,
     pub intermediate_texture_2: wgpu::Texture,
-    pub sky_hdr_texture: wgpu::Texture,
     pub gpu_profiler: gpu_profiler::GpuProfiler,
 }
 
@@ -65,6 +65,8 @@ pub struct WebGPUUniqueResources {
     pub bloom_shading_resource: Option<bloom_shading::WebGPUbloomShadingResource>,
     pub composite_shading_resource: Option<composite_shading::WebGPUCompositeShadingResource>,
     pub hdr_convertion_resource: Option<hdr_convertion_shading::WebGPUHDREnvironmentResource>,
+    pub sky_hdr_image: Shared<Option<hdr_convertion_shading::SkyHdrImage>>,
+    pub sky_hdr_load_started: bool,
     pub sky_shading_resource: Option<sky_shading::WebGPUSkyShadingResource>,
     pub shadow_resource: Option<shadow::WebGPUShadowResource>,
 }
@@ -189,28 +191,6 @@ pub async fn init_interface<'a>() -> WebGPUInterface<'a> {
         view_formats: &[],
     });
 
-    let (sky_hdr_data, sky_hdr_width, sky_hdr_height) =
-        engine::load::load_hdr_file(constant::HDR_KLOPPENHEIM_02).await;
-    let sky_hdr_texture = device.create_texture_with_data(
-        &queue,
-        &wgpu::TextureDescriptor {
-            label: Some("Sky HDR Texture"),
-            size: wgpu::Extent3d {
-                width: sky_hdr_width,
-                height: sky_hdr_height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        },
-        wgpu::util::TextureDataOrder::default(),
-        bytemuck::cast_slice(&sky_hdr_data),
-    );
-
     let gpu_profiler = gpu_profiler::GpuProfiler::new(&device, &queue, timestamp_supported);
 
     // Return webgpu resource
@@ -224,7 +204,6 @@ pub async fn init_interface<'a>() -> WebGPUInterface<'a> {
         depth_texture,
         intermediate_texture,
         intermediate_texture_2,
-        sky_hdr_texture,
         gpu_profiler,
     };
 
