@@ -176,7 +176,7 @@ pub fn create_phong_shader_context(
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "../shader/phong.wgsl"
+                    "../shader/forward_phong.wgsl"
                 ))),
             });
 

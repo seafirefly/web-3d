@@ -293,7 +293,7 @@ fn create_bloom_shader_resource(interface: &WebGPUInterface) -> WebGPUbloomShadi
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "../shader/bloom.wgsl"
+                    "../shader/postprocess_bloom.wgsl"
                 ))),
             });
 

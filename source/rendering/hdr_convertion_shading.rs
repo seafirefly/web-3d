@@ -173,7 +173,7 @@ fn create_hdr_conversion_shader_resource(
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "../shader/hdr_conversion.wgsl"
+                    "../shader/skybox_hdr_convertion.wgsl"
                 ))),
             });
 

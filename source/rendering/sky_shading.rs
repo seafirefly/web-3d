@@ -92,7 +92,7 @@ fn create_sky_shader_resource(
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "../shader/sky.wgsl"
+                    "../shader/skybox.wgsl"
                 ))),
             });
 

@@ -821,7 +821,7 @@ fn create_differed_shading_context(
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "../shader/differed.wgsl"
+                    "../shader/differed_pbr.wgsl"
                 ))),
             });
 

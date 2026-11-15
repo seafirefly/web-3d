@@ -102,7 +102,7 @@ fn create_line_grid_shader_resource(interface: &WebGPUInterface) -> WebGPULineGr
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "../shader/line.wgsl"
+                    "../shader/overlay_line.wgsl"
                 ))),
             });
 

@@ -96,7 +96,7 @@ fn create_composite_shader_resource(interface: &WebGPUInterface) -> WebGPUCompos
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "../shader/composite.wgsl"
+                    "../shader/postprocess_composite.wgsl"
                 ))),
             });
 
