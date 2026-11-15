@@ -2,7 +2,7 @@ use crate::engine;
 use crate::engine::constant;
 use crate::rendering::common;
 use crate::rendering::webgpu;
-use crate::rendering::gpu_profiler::GpuPassGroup;
+use crate::rendering::webgpu::gpu_profiler::GpuPassGroup;
 use crate::rendering::webgpu::{
     WebGPUInterface, WebGPUShaderContext, WebGPUUniqueResources, WEBGPU_CULL_MODE,
     WEBGPU_DEPTH_FORMAT,
@@ -367,7 +367,7 @@ pub fn create_differed_gbuffer_shader_context(interface: &WebGPUInterface) -> We
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "../shader/differed_write_gbuffers.wgsl"
+                    "../../shader/differed_write_gbuffers.wgsl"
                 ))),
             });
 
@@ -490,13 +490,13 @@ pub fn create_differed_gbuffer_shader_context(interface: &WebGPUInterface) -> We
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: Some(constant::VS_ENTRY_POINT),
+                    entry_point: Some(common::VS_ENTRY_POINT),
                     compilation_options: Default::default(),
                     buffers: &vertex_buffers,
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: Some(constant::FS_ENTRY_POINT),
+entry_point: Some(common::FS_ENTRY_POINT),
                     compilation_options: Default::default(),
                     targets: &[
                         Some(wgpu::ColorTargetState {
@@ -821,7 +821,7 @@ fn create_differed_shading_context(
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "../shader/differed_pbr.wgsl"
+                    "../../shader/differed_pbr.wgsl"
                 ))),
             });
 
@@ -1116,13 +1116,13 @@ fn create_differed_shading_context(
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: Some(constant::VS_ENTRY_POINT),
+                    entry_point: Some(common::VS_ENTRY_POINT),
                     compilation_options: Default::default(),
                     buffers: &[],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: Some(engine::constant::FS_ENTRY_POINT),
+                    entry_point: Some(common::FS_ENTRY_POINT),
                     compilation_options: Default::default(),
                     targets: &[Some(interface.intermediate_texture.format().into())],
                 }),
@@ -1145,7 +1145,7 @@ fn create_differed_shading_context(
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: Some(constant::VS_ENTRY_POINT),
+                    entry_point: Some(common::VS_ENTRY_POINT),
                     compilation_options: Default::default(),
                     buffers: &[],
                 },
@@ -1282,7 +1282,7 @@ fn create_differed_shading_context(
                 layout: Some(&ibl_piepeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: Some(constant::VS_ENTRY_POINT),
+                    entry_point: Some(common::VS_ENTRY_POINT),
                     compilation_options: Default::default(),
                     buffers: &[],
                 },
@@ -1322,7 +1322,7 @@ fn create_differed_shading_context(
 fn update_differed_shading_buffer(
     interface: &WebGPUInterface,
     scene: &engine::scene::Scene,
-    shadow_resource: &crate::rendering::shadow::WebGPUShadowResource,
+    shadow_resource: &crate::rendering::webgpu::shadow::WebGPUShadowResource,
     resource: &WebGPUDifferedShadingResource,
 ) {
     let scene_value = scene;

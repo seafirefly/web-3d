@@ -1,6 +1,6 @@
 use crate::engine;
-use crate::engine::constant;
-use crate::rendering::gpu_profiler::GpuPassGroup;
+use crate::rendering::common;
+use crate::rendering::webgpu::gpu_profiler::GpuPassGroup;
 use crate::rendering::webgpu::{
     WebGPUInterface, WebGPUUniqueResources, WEBGPU_CULL_MODE, WEBGPU_FRONT_FACE,
 };
@@ -96,7 +96,7 @@ fn create_composite_shader_resource(interface: &WebGPUInterface) -> WebGPUCompos
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "../shader/postprocess_composite.wgsl"
+                    "../../shader/postprocess_composite.wgsl"
                 ))),
             });
 
@@ -219,13 +219,13 @@ fn create_composite_shader_resource(interface: &WebGPUInterface) -> WebGPUCompos
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: Some(constant::VS_ENTRY_POINT),
+                    entry_point: Some(common::VS_ENTRY_POINT),
                     compilation_options: Default::default(),
                     buffers: &[],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: Some(constant::FS_ENTRY_POINT),
+                    entry_point: Some(common::FS_ENTRY_POINT),
                     compilation_options: Default::default(),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: interface.swapchain_format.into(),

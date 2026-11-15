@@ -1,8 +1,8 @@
 use crate::engine;
 use crate::engine::constant;
 use crate::rendering::common;
-use crate::rendering::gpu_profiler::GpuPassGroup;
-use crate::rendering::shadow;
+use crate::rendering::webgpu::gpu_profiler::GpuPassGroup;
+use crate::rendering::webgpu::shadow;
 use crate::rendering::webgpu::{
     WebGPUInterface, WebGPUShaderContext, WebGPUUniqueResources, WEBGPU_CULL_MODE,
     WEBGPU_DEPTH_FORMAT, WEBGPU_FRONT_FACE,
@@ -176,7 +176,7 @@ pub fn create_phong_shader_context(
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "../shader/forward_phong.wgsl"
+                    "../../shader/forward_phong.wgsl"
                 ))),
             });
 
@@ -327,13 +327,13 @@ pub fn create_phong_shader_context(
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: Some(constant::VS_ENTRY_POINT),
+                    entry_point: Some(common::VS_ENTRY_POINT),
                     compilation_options: Default::default(),
                     buffers: &vertex_buffer_layout,
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: Some(constant::FS_ENTRY_POINT),
+                    entry_point: Some(common::FS_ENTRY_POINT),
                     compilation_options: Default::default(),
                     targets: &[Some(interface.intermediate_texture.format().into())],
                 }),

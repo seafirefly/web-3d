@@ -1,5 +1,9 @@
 #![allow(dead_code)]
 
+// Rendering constants
+pub const VS_ENTRY_POINT: &str = "vs_main";
+pub const FS_ENTRY_POINT: &str = "fs_main";
+
 // Definition of GPU vertex
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]

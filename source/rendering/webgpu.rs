@@ -1,12 +1,18 @@
 use crate::engine::{self, constant};
 use crate::rendering::common;
-use crate::rendering::{
-    bloom_shading, composite_shading, differed_shading, forward_shading, gpu_profiler,
-    hdr_convertion_shading, line_grid_shading, shadow, sky_shading,
-};
 use crate::types::Shared;
 use wasm_bindgen::JsCast;
 use wgpu::util::DeviceExt;
+
+pub mod bloom_shading;
+pub mod composite_shading;
+pub mod differed_shading;
+pub mod forward_shading;
+pub mod gpu_profiler;
+pub mod hdr_convertion_shading;
+pub mod line_grid_shading;
+pub mod shadow;
+pub mod sky_shading;
 
 pub const WEBGPU_DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
 pub const WEBGPU_FRONT_FACE: wgpu::FrontFace = wgpu::FrontFace::Ccw;

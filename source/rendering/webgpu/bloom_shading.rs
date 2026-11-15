@@ -1,6 +1,7 @@
 use crate::engine;
 use crate::engine::constant;
-use crate::rendering::gpu_profiler::GpuPassGroup;
+use crate::rendering::common;
+use crate::rendering::webgpu::gpu_profiler::GpuPassGroup;
 use crate::rendering::webgpu::{
     WebGPUInterface, WebGPUUniqueResources, WEBGPU_CULL_MODE, WEBGPU_FRONT_FACE,
 };
@@ -293,7 +294,7 @@ fn create_bloom_shader_resource(interface: &WebGPUInterface) -> WebGPUbloomShadi
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "../shader/postprocess_bloom.wgsl"
+                    "../../shader/postprocess_bloom.wgsl"
                 ))),
             });
 
@@ -442,7 +443,7 @@ fn create_bloom_shader_resource(interface: &WebGPUInterface) -> WebGPUbloomShadi
                 layout: Some(&extraction_pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: Some(constant::VS_ENTRY_POINT),
+                    entry_point: Some(common::VS_ENTRY_POINT),
                     compilation_options: Default::default(),
                     buffers: &[],
                 },
@@ -589,7 +590,7 @@ fn create_bloom_shader_resource(interface: &WebGPUInterface) -> WebGPUbloomShadi
             layout: Some(&down_sampling_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: Some(constant::VS_ENTRY_POINT),
+                entry_point: Some(common::VS_ENTRY_POINT),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
@@ -688,7 +689,7 @@ fn create_bloom_shader_resource(interface: &WebGPUInterface) -> WebGPUbloomShadi
             layout: Some(&up_sampling_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: Some(constant::VS_ENTRY_POINT),
+                entry_point: Some(common::VS_ENTRY_POINT),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
@@ -806,7 +807,7 @@ fn create_bloom_shader_resource(interface: &WebGPUInterface) -> WebGPUbloomShadi
                 layout: Some(&resolve_pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: Some(constant::VS_ENTRY_POINT),
+                    entry_point: Some(common::VS_ENTRY_POINT),
                     compilation_options: Default::default(),
                     buffers: &[],
                 },

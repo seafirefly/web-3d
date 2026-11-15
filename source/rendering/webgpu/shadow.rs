@@ -1,7 +1,6 @@
 use crate::engine;
-use crate::engine::constant;
 use crate::rendering::common;
-use crate::rendering::gpu_profiler::GpuPassGroup;
+use crate::rendering::webgpu::gpu_profiler::GpuPassGroup;
 use crate::rendering::webgpu::{WebGPUInterface, WebGPUUniqueResources, WEBGPU_CULL_MODE};
 
 pub const SHADOW_MAP_SIZE: u32 = 4096;
@@ -80,7 +79,7 @@ fn create_shadow_resource(interface: &WebGPUInterface) -> WebGPUShadowResource {
         .create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Directional Shadow Shader"),
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                "../shader/shadow.wgsl"
+                "../../shader/shadow.wgsl"
             ))),
         });
 
@@ -152,7 +151,7 @@ fn create_shadow_resource(interface: &WebGPUInterface) -> WebGPUShadowResource {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: Some(constant::VS_ENTRY_POINT),
+                entry_point: Some(common::VS_ENTRY_POINT),
                 compilation_options: Default::default(),
                 buffers: &vertex_buffers,
             },

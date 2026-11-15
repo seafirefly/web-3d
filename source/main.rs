@@ -1,7 +1,7 @@
 mod engine;
 mod rendering;
 mod types;
-mod web;
+mod frontend;
 
 use crate::rendering::webgpu::{self, WebGPUUniqueResources};
 use crate::types::Shared;
@@ -37,7 +37,7 @@ impl PerformanceMetrics {
         let average_frame_time_ms = self.total_frame_time_ms / self.frame_count as f64;
         let frames_per_second = self.frame_count as f64 * 1000.0 / sample_duration_ms;
         let cpu_busy_percent = self.total_frame_time_ms * 100.0 / sample_duration_ms;
-        web::gui::update_performance_statistics(
+        frontend::gui::update_performance_statistics(
             average_frame_time_ms,
             frames_per_second,
             cpu_busy_percent,
@@ -127,13 +127,13 @@ pub async fn main() {
     };
 
     // Initialize control response JS object and event listener
-    let control_response_js: Shared<web::eventlistener::ControlResponseJs> = Shared::new(
-        RefCell::new(web::eventlistener::ControlResponseJs::default()),
+    let control_response_js: Shared<frontend::eventlistener::ControlResponseJs> = Shared::new(
+        RefCell::new(frontend::eventlistener::ControlResponseJs::default()),
     );
-    web::eventlistener::add_event_listener_control(&control_response_js);
+    frontend::eventlistener::add_event_listener_control(&control_response_js);
 
     // Create frontend gui interface
-    web::gui::create_frontend_gui(&scene);
+    frontend::gui::create_frontend_gui(&scene);
 
     // Rendering loop
     // Fetch the Performance object once, since looking it up from window every frame is costly.
@@ -162,7 +162,7 @@ pub async fn main() {
         let frame_finished_at = performance.now();
         if performance_metrics.record_frame(frame_finished_at - frame_started_at, frame_finished_at)
         {
-            web::gui::update_gpu_statistics(
+            frontend::gui::update_gpu_statistics(
                 webgpu_interface.gpu_profiler.is_supported(),
                 webgpu_interface.gpu_profiler.latest_timings(),
                 webgpu_interface.gpu_profiler.cpu_timings(),

@@ -1,5 +1,5 @@
 use crate::engine::{self, constant};
-use crate::rendering::gpu_profiler::GpuPassGroup;
+use crate::rendering::webgpu::gpu_profiler::GpuPassGroup;
 use crate::rendering::webgpu::{WebGPUInterface, WebGPUUniqueResources};
 use wasm_bindgen::JsCast;
 
@@ -92,7 +92,7 @@ fn create_sky_shader_resource(
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "../shader/skybox.wgsl"
+                    "../../shader/skybox.wgsl"
                 ))),
             });
 

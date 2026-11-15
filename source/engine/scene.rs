@@ -1,5 +1,5 @@
 use crate::types::Shared;
-use crate::{rendering, web};
+use crate::{frontend, rendering};
 
 // Scene world
 
@@ -122,8 +122,8 @@ impl SceneParameter {
             // camera
             eye_location: glam::Vec3 {
                 x: 0.0,
-                y: -2.0,
-                z: 1.0,
+                y: -7.0,
+                z: 4.5,
             },
             eye_direction: glam::Vec3 {
                 x: 0.0,
@@ -242,7 +242,7 @@ pub fn batch_objects(scene: &Shared<Scene>) {
 
 pub fn update_camera_control(
     scene: &Shared<Scene>,
-    in_control_event: &Shared<web::eventlistener::ControlResponseJs>,
+    in_control_event: &Shared<frontend::eventlistener::ControlResponseJs>,
 ) {
     let mut scene_value = scene.borrow_mut();
     let mut eye: glam::Vec3 = scene_value.parameters.eye_location;

@@ -1,7 +1,7 @@
 mod widgets;
 
 use crate::engine::scene::{CompositeViewTransform, Scene, ShadingType, ToneMappingType};
-use crate::rendering::gpu_profiler::{CpuTimings, GpuPassGroup, GpuTimings};
+use crate::rendering::webgpu::gpu_profiler::{CpuTimings, GpuPassGroup, GpuTimings};
 use crate::types::Shared;
 use widgets::*;
 
