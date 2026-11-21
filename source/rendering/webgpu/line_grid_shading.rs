@@ -262,7 +262,12 @@ fn update_line_grid_shader_resource(
 
     let inv_view_matrix = glam::Mat4::look_to_rh(eye, direction, glam::Vec3::Z).inverse();
     let inv_projection_matrix: glam::Mat4 =
-        glam::Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, aspect_ratio, 0.01, 100.0)
+        glam::Mat4::perspective_rh(
+            scene.parameters.fov_y_degrees.to_radians(),
+            aspect_ratio,
+            0.01,
+            100.0,
+        )
             .inverse();
 
     let camera_position: [f32; 4] = [eye.x, eye.y, eye.z, 1.0];

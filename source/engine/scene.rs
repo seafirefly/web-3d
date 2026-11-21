@@ -47,6 +47,8 @@ pub struct SceneParameter {
     // camera
     pub eye_location: glam::Vec3,
     pub eye_direction: glam::Vec3,
+    // vertical field of view in degrees
+    pub fov_y_degrees: f32,
     // light
     pub light_parameters: SceneLightParameter,
     // scene model
@@ -173,6 +175,7 @@ impl SceneParameter {
                 y: 2.0,
                 z: -1.0,
             },
+            fov_y_degrees: 60.0,
             // light
             light_parameters: SceneLightParameter {
                 directional_light_angle: [0.5, 1.0, -1.0],

@@ -614,7 +614,12 @@ fn update_forward_pbr_shading_resource(
 
         let view_matrix = glam::Mat4::look_to_rh(eye, direction, glam::Vec3::Z);
         let projection_matrix: glam::Mat4 =
-            glam::Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, aspect_ratio, 0.01, 100.0);
+            glam::Mat4::perspective_rh(
+                scene_value.parameters.fov_y_degrees.to_radians(),
+                aspect_ratio,
+                0.01,
+                100.0,
+            );
         let transform_matrix: glam::Mat4 = projection_matrix * view_matrix * model_matrix;
 
         let mut directional =

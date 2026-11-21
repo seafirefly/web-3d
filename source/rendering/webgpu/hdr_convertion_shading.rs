@@ -186,9 +186,8 @@ pub fn hdr_convertion_pass(
                 &[],
             );
 
-            let prefilter_size = 128;
             for mip in 0..5 {
-                let current_size = (prefilter_size >> mip).max(1);
+                let current_size = (PREFILTER_MAP_SIZE >> mip).max(1);
                 let dispatch_size = (current_size + 7) / 8;
 
                 cpass.set_bind_group(
@@ -253,6 +252,7 @@ pub fn ibl_debug_pass(
 
 // HDR conversion shader resource creation and update functions ----------------------------------------------------------------------------
 const IRRADIANCE_MAP_SIZE: u32 = 32;
+const PREFILTER_MAP_SIZE: u32 = 256;
 
 pub struct SkyHdrImage {
     pub data: Vec<half::f16>,
@@ -361,8 +361,8 @@ fn create_hdr_conversion_shader_resource(
     let prefilter_map = interface.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Pre-filter Map"),
         size: wgpu::Extent3d {
-            width: 128,
-            height: 128,
+            width: PREFILTER_MAP_SIZE,
+            height: PREFILTER_MAP_SIZE,
             depth_or_array_layers: 6,
         },
         mip_level_count: 5,

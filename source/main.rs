@@ -120,6 +120,13 @@ pub async fn main() {
     *g.borrow_mut() = Some(wasm_bindgen::closure::Closure::wrap(Box::new(move || {
         let frame_started_at = performance.now();
         engine::scene::update_camera_control(&scene, &control_response_js);
+        {
+            let scene_value = scene.borrow();
+            frontend::gui::update_camera_controls(
+                scene_value.parameters.eye_location,
+                scene_value.parameters.eye_direction,
+            );
+        }
         scene_loader::update_scene_model(&webgpu_interface, &scene, &scene_load_slot);
         rendering::webgpu::hdr_convertion_shading::update_sky_box(&scene, &mut global_resources);
 

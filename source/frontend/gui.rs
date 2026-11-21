@@ -5,12 +5,25 @@ use crate::engine::scene::{
 };
 use crate::rendering::webgpu::gpu_profiler::{CpuTimings, GpuPassGroup, GpuTimings};
 use crate::types::Shared;
+use wasm_bindgen::JsCast;
 use widgets::*;
 
 const DIRECTIONAL_AXES: [(&str, &str); 3] = [
     ("directional-range-x", "X"),
     ("directional-range-y", "Y"),
     ("directional-range-z", "Z"),
+];
+
+const CAMERA_POSITION_AXES: [(&str, &str); 3] = [
+    ("camera-position-x", "X"),
+    ("camera-position-y", "Y"),
+    ("camera-position-z", "Z"),
+];
+
+const CAMERA_DIRECTION_AXES: [(&str, &str); 3] = [
+    ("camera-direction-x", "X"),
+    ("camera-direction-y", "Y"),
+    ("camera-direction-z", "Z"),
 ];
 
 const AMBIENT_CHANNELS: [(&str, &str, &str, &str, usize); 4] = [
@@ -75,6 +88,7 @@ pub fn create_frontend_gui(scene: &Shared<Scene>) {
     wrapper.set_id("dialog-wrapper");
 
     environment(&wrapper, scene);
+    camera(&wrapper, scene);
     base_pass(&wrapper, scene);
     skybox(&wrapper, scene);
     postprocess(&wrapper, scene);
@@ -99,6 +113,27 @@ pub fn update_performance_statistics(average_frame_time_ms: f64, frames_per_seco
 pub fn update_scene_statistics(objects: usize, materials: usize) {
     update_statistic("objects-analytics-value", &objects.to_string());
     update_statistic("materials-analytics-value", &materials.to_string());
+}
+
+/// Reflects the camera pose changed by user input (mouse/keyboard) into the camera sliders.
+pub fn update_camera_controls(eye: glam::Vec3, direction: glam::Vec3) {
+    for (index, &(id, _)) in CAMERA_POSITION_AXES.iter().enumerate() {
+        update_slider(id, eye[index]);
+    }
+    for (index, &(id, _)) in CAMERA_DIRECTION_AXES.iter().enumerate() {
+        update_slider(id, direction[index]);
+    }
+}
+
+fn update_slider(id: &str, value: f32) {
+    let input = gloo::utils::document()
+        .get_element_by_id(id)
+        .expect("Camera slider element should exist")
+        .unchecked_into::<web_sys::HtmlInputElement>();
+    input.set_value(&value.to_string());
+    if let Some(text) = gloo::utils::document().get_element_by_id(&format!("{id}-text")) {
+        text.set_text_content(Some(&input.value()));
+    }
 }
 
 fn update_statistic(id: &str, value: &str) {
@@ -247,6 +282,59 @@ fn environment(parent: &web_sys::Element, scene: &Shared<Scene>) {
             }),
         );
     }
+}
+
+fn camera(parent: &web_sys::Element, scene: &Shared<Scene>) {
+    let content = dialog(parent, "camera", "Camera");
+
+    let position = accordion(&content, "camera-position", "Position", true);
+    for (index, &(id, label)) in CAMERA_POSITION_AXES.iter().enumerate() {
+        let value = scene.borrow().parameters.eye_location[index];
+        let slider = Slider {
+            id,
+            label,
+            min: "-20.0",
+            max: "20.0",
+            value,
+        };
+        append(
+            &position,
+            &slider_row(scene, slider, move |s, v| {
+                s.parameters.eye_location[index] = v;
+            }),
+        );
+    }
+
+    let direction = accordion(&content, "camera-direction", "Direction", true);
+    for (index, &(id, label)) in CAMERA_DIRECTION_AXES.iter().enumerate() {
+        let value = scene.borrow().parameters.eye_direction[index];
+        let slider = Slider {
+            id,
+            label,
+            min: "-3.0",
+            max: "3.0",
+            value,
+        };
+        append(
+            &direction,
+            &slider_row(scene, slider, move |s, v| {
+                s.parameters.eye_direction[index] = v;
+            }),
+        );
+    }
+
+    let value = scene.borrow().parameters.fov_y_degrees;
+    let slider = Slider {
+        id: "camera-fov-range",
+        label: "FOV",
+        min: "10.0",
+        max: "120.0",
+        value,
+    };
+    append(
+        &content,
+        &slider_row(scene, slider, |s, v| s.parameters.fov_y_degrees = v),
+    );
 }
 
 fn base_pass(parent: &web_sys::Element, scene: &Shared<Scene>) {

@@ -515,7 +515,12 @@ fn update_differed_gbuffer_shading_resource(
         // Create matrices and write buffer
         let view_matrix = glam::Mat4::look_to_rh(eye, direction, glam::Vec3::Z);
         let projection_matrix: glam::Mat4 =
-            glam::Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, aspect_ratio, 0.01, 100.0);
+            glam::Mat4::perspective_rh(
+                scene.parameters.fov_y_degrees.to_radians(),
+                aspect_ratio,
+                0.01,
+                100.0,
+            );
 
         let rotaton_matrix: glam::Mat4 =
             glam::Mat4::from_quat(model_matrix.to_scale_rotation_translation().1);
