@@ -168,44 +168,114 @@ fn sample_directional_shadow(
 
   let slope_bias = max(0.002 * (1.0 - max(dot(normal, light_direction), 0.0)), 0.0005);
   let shadow_depth = clamp(shadow_ndc.z - slope_bias, 0.0, 1.0);
-  let shadow_dimensions = vec2<f32>(
-    f32(textureDimensions(t_shadow_map).x),
-    f32(textureDimensions(t_shadow_map).y)
-  );
-  let texel_size = 1.0 / max(shadow_dimensions, vec2<f32>(1.0, 1.0));
+  let texel_size = 1.0 / max(vec2<f32>(textureDimensions(t_shadow_map)), vec2<f32>(1.0, 1.0));
 
+  // 5x5 PCF kernel: outer product of binomial [1, 4, 6, 4, 1] (weights sum to 256)
+  let kernel_1d = array<f32, 5>(1.0, 4.0, 6.0, 4.0, 1.0);
   var shadow_sample = 0.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-2.0 * SHADOW_FILTER_RADIUS, -2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 1.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-1.0 * SHADOW_FILTER_RADIUS, -2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 4.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 0.0, -2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 6.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 1.0 * SHADOW_FILTER_RADIUS, -2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 4.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 2.0 * SHADOW_FILTER_RADIUS, -2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 1.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-2.0 * SHADOW_FILTER_RADIUS, -1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 4.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-1.0 * SHADOW_FILTER_RADIUS, -1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 16.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 0.0, -1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 24.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 1.0 * SHADOW_FILTER_RADIUS, -1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 16.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 2.0 * SHADOW_FILTER_RADIUS, -1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 4.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-2.0 * SHADOW_FILTER_RADIUS, 0.0), shadow_depth) * 6.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-1.0 * SHADOW_FILTER_RADIUS, 0.0), shadow_depth) * 24.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 0.0, 0.0), shadow_depth) * 36.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 1.0 * SHADOW_FILTER_RADIUS, 0.0), shadow_depth) * 24.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 2.0 * SHADOW_FILTER_RADIUS, 0.0), shadow_depth) * 6.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-2.0 * SHADOW_FILTER_RADIUS, 1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 4.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-1.0 * SHADOW_FILTER_RADIUS, 1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 16.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 0.0, 1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 24.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 1.0 * SHADOW_FILTER_RADIUS, 1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 16.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 2.0 * SHADOW_FILTER_RADIUS, 1.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 4.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-2.0 * SHADOW_FILTER_RADIUS, 2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 1.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>(-1.0 * SHADOW_FILTER_RADIUS, 2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 4.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 0.0, 2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 6.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 1.0 * SHADOW_FILTER_RADIUS, 2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 4.0;
-  shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + texel_size * vec2<f32>( 2.0 * SHADOW_FILTER_RADIUS, 2.0 * SHADOW_FILTER_RADIUS), shadow_depth) * 1.0;
+  for (var y = -2; y <= 2; y++) {
+    for (var x = -2; x <= 2; x++) {
+      let offset = vec2<f32>(f32(x), f32(y)) * SHADOW_FILTER_RADIUS * texel_size;
+      let weight = kernel_1d[x + 2] * kernel_1d[y + 2];
+      shadow_sample += textureSampleCompare(t_shadow_map, s_shadow_map, shadow_uv + offset, shadow_depth) * weight;
+    }
+  }
   shadow_sample /= 256.0;
 
   return 1.0 - valid_shadow + shadow_sample * valid_shadow;
 }
 
-// render funcions
+// fragment helpers
+
+struct GBufferTexel
+{
+  position           : vec3<f32>,
+  normal             : vec3<f32>,
+  depth              : f32,
+  albedo             : vec4<f32>,
+  metallic_roughness : vec4<f32>,
+}
+
+struct Surface
+{
+  position  : vec3<f32>,
+  normal    : vec3<f32>,
+  albedo    : vec3<f32>,
+  roughness : f32,
+  metallic  : f32,
+  view      : vec3<f32>,
+}
+
+fn load_gbuffer(coord : vec4<f32>) -> GBufferTexel
+{
+  let texel = vec2<i32>(floor(coord.xy));
+  return GBufferTexel(
+    textureLoad(t_positon, texel, 0).xyz,
+    textureLoad(t_normal, texel, 0).xyz,
+    textureLoad(t_depth, texel, 0),
+    textureLoad(t_albedo, texel, 0),
+    textureLoad(t_metallic, texel, 0),
+  );
+}
+
+fn make_surface(g : GBufferTexel) -> Surface
+{
+  return Surface(
+    g.position,
+    safe_normalize(g.normal),
+    g.albedo.rgb,
+    clamp(g.metallic_roughness.g, 0.045, 1.0),
+    clamp(g.metallic_roughness.b, 0.0, 1.0),
+    safe_normalize(u_differd.camera_position.xyz - g.position),
+  );
+}
+
+fn light_direction() -> vec3<f32>
+{
+  return safe_normalize(-u_differd.directional_light.xyz);
+}
+
+fn light_radiance() -> f32
+{
+  return max(u_differd.directional_light.w, 0.0);
+}
+
+fn ambient_irradiance() -> vec3<f32>
+{
+  return u_differd.ambient_light.rgb * max(u_differd.ambient_light.w, 0.0);
+}
+
+// direct light multiplied by radiance and shadow visibility
+fn direct_radiance(s : Surface) -> vec3<f32>
+{
+  let light = light_direction();
+  let shadow_visibility = sample_directional_shadow(s.position, s.normal, light);
+  let lighting = pbr_direct_lighting(s.normal, s.view, light, s.albedo, s.roughness, s.metallic);
+  return lighting.direct * light_radiance() * shadow_visibility;
+}
+
+// split-sum IBL: irradiance for diffuse, prefiltered environment for specular
+fn ibl_ambient(s : Surface) -> vec3<f32>
+{
+  let n_dot_v : f32 = max(dot(s.normal, s.view), 0.0);
+  let f0 : vec3<f32> = mix(vec3<f32>(0.04, 0.04, 0.04), s.albedo, vec3<f32>(s.metallic));
+  let fresnel : vec3<f32> = fresnel_schlick(n_dot_v, f0);
+  let kd : vec3<f32> = (vec3<f32>(1.0, 1.0, 1.0) - fresnel) * (1.0 - s.metallic);
+
+  // Irradiance map stores the cosine-weighted average radiance, so it is used without an extra 1/PI
+  let irradiance : vec3<f32> = textureSample(t_irradiance, s_env, s.normal).rgb;
+  let diffuse_ibl : vec3<f32> = kd * s.albedo * irradiance;
+
+  // Prefilter map has 5 mips (roughness 0..1 mapped to mip 0..4)
+  let reflect_dir : vec3<f32> = reflect(-s.view, s.normal);
+  let prefiltered : vec3<f32> = textureSampleLevel(t_prefilter, s_env, reflect_dir, s.roughness * 4.0).rgb;
+  let env_brdf : vec2<f32> = env_brdf_approx(s.roughness, n_dot_v);
+  let specular_ibl : vec3<f32> = prefiltered * (f0 * env_brdf.x + vec3<f32>(env_brdf.y));
+
+  return diffuse_ibl + specular_ibl;
+}
+
+// render functions
 
 @vertex
 fn vs_main( @builtin(vertex_index) VertexIndex : u32 ) -> @builtin(position) vec4f 
@@ -221,157 +291,65 @@ fn vs_main( @builtin(vertex_index) VertexIndex : u32 ) -> @builtin(position) vec
 @fragment
 fn fs_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
 {
-    let position : vec4f     = textureLoad( t_positon, vec2i(floor(coord.xy)), 0 );
-    var normal   : vec3<f32> = textureLoad( t_normal, vec2i(floor(coord.xy)), 0 ).xyz;
-    var depth    : f32       = textureLoad( t_depth, vec2i(floor(coord.xy)), 0 );
-    var albedo   : vec4<f32> = textureLoad( t_albedo, vec2i(floor(coord.xy)), 0 );
-  let metallic_roughness   : vec4<f32> = textureLoad( t_metallic, vec2i(floor(coord.xy)), 0 );
+  let g = load_gbuffer(coord);
+  if (g.depth >= 1.0)
+  {
+    discard;
+  }
 
-    if (depth >= 1.0) 
-    {
-      discard;
-    }
+  let s = make_surface(g);
+  let ambient_diffuse = pbr_ambient_diffuse_lighting(s.normal, s.view, s.albedo, s.metallic, ambient_irradiance());
 
-  normal = safe_normalize(normal);
-
-  let light_direction             : vec3<f32> = safe_normalize(-u_differd.directional_light.xyz);
-  let directional_light_intensity : f32       = max(u_differd.directional_light.w, 0.0);
-  let light_radiance              : f32       = directional_light_intensity;
-  let view                        : vec3<f32> = safe_normalize(u_differd.camera_position.xyz - position.xyz);
-  let roughness                   : f32       = clamp(metallic_roughness.g, 0.045, 1.0);
-  let metallic                    : f32       = clamp(metallic_roughness.b, 0.0, 1.0);
-  let shadow_visibility           : f32       = sample_directional_shadow(position.xyz, normal, light_direction);
-  let lighting                    : PbrLighting = pbr_direct_lighting(
-    normal,
-    view,
-    light_direction,
-    albedo.rgb,
-    roughness,
-    metallic,
-  );
-  let direct_color                : vec3<f32> = lighting.direct;
-
-  let ambient_diffuse : vec3<f32> = pbr_ambient_diffuse_lighting(
-    normal,
-    view,
-    albedo.rgb,
-    metallic,
-    u_differd.ambient_light.rgb * max(u_differd.ambient_light.w, 0.0),
-  );
-
-  var frag_color : vec4<f32> = vec4<f32>(direct_color * light_radiance * shadow_visibility + ambient_diffuse, albedo.a);
-    return frag_color;
+  return vec4<f32>(direct_radiance(s) + ambient_diffuse, g.albedo.a);
 }
 
 @fragment
 fn fs_ibl_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
 {
-    let position : vec4f     = textureLoad( t_positon, vec2i(floor(coord.xy)), 0 );
-    var normal   : vec3<f32> = textureLoad( t_normal, vec2i(floor(coord.xy)), 0 ).xyz;
-    var depth    : f32       = textureLoad( t_depth, vec2i(floor(coord.xy)), 0 );
-    var albedo   : vec4<f32> = textureLoad( t_albedo, vec2i(floor(coord.xy)), 0 );
-  let metallic_roughness   : vec4<f32> = textureLoad( t_metallic, vec2i(floor(coord.xy)), 0 );
+  let g = load_gbuffer(coord);
+  if (g.depth >= 1.0)
+  {
+    discard;
+  }
 
-    if (depth >= 1.0) 
-    {
-      discard;
-    }
+  let s = make_surface(g);
 
-  normal = safe_normalize(normal);
-
-  let light_direction             : vec3<f32> = safe_normalize(-u_differd.directional_light.xyz);
-  let directional_light_intensity : f32       = max(u_differd.directional_light.w, 0.0);
-  let light_radiance              : f32       = directional_light_intensity;
-  let view                        : vec3<f32> = safe_normalize(u_differd.camera_position.xyz - position.xyz);
-  let roughness                   : f32       = clamp(metallic_roughness.g, 0.045, 1.0);
-  let metallic                    : f32       = clamp(metallic_roughness.b, 0.0, 1.0);
-  let shadow_visibility           : f32       = sample_directional_shadow(position.xyz, normal, light_direction);
-  let lighting                    : PbrLighting = pbr_direct_lighting(
-    normal,
-    view,
-    light_direction,
-    albedo.rgb,
-    roughness,
-    metallic,
-  );
-  let direct_color                : vec3<f32> = lighting.direct;
-
-  let n_dot_v : f32 = max(dot(normal, view), 0.0);
-  let f0 : vec3<f32> = mix(vec3<f32>(0.04, 0.04, 0.04), albedo.rgb, vec3<f32>(metallic, metallic, metallic));
-  let fresnel : vec3<f32> = fresnel_schlick(n_dot_v, f0);
-  let kd : vec3<f32> = (vec3<f32>(1.0, 1.0, 1.0) - fresnel) * (1.0 - metallic);
-
-  // Irradiance map stores the cosine-weighted average radiance, so it is used without an extra 1/PI
-  let irradiance : vec3<f32> = textureSample(t_irradiance, s_env, normal).rgb;
-  let diffuse_ibl : vec3<f32> = kd * albedo.rgb * irradiance;
-
-  // Prefilter map has 5 mips (roughness 0..1 mapped to mip 0..4)
-  let reflect_dir : vec3<f32> = reflect(-view, normal);
-  let prefiltered : vec3<f32> = textureSampleLevel(t_prefilter, s_env, reflect_dir, roughness * 4.0).rgb;
-  let env_brdf : vec2<f32> = env_brdf_approx(roughness, n_dot_v);
-  let specular_ibl : vec3<f32> = prefiltered * (f0 * env_brdf.x + vec3<f32>(env_brdf.y));
-
-  var frag_color = vec4<f32>(direct_color * light_radiance * shadow_visibility + diffuse_ibl + specular_ibl, albedo.a);
-    return frag_color;
+  return vec4<f32>(direct_radiance(s) + ibl_ambient(s), g.albedo.a);
 }
 
 @fragment
 fn fs_debug_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
 {
-    let position : vec4f     = textureLoad( t_positon, vec2i(floor(coord.xy)), 0 );
-    var normal   : vec3<f32> = textureLoad( t_normal, vec2i(floor(coord.xy)), 0 ).xyz;
-    var depth    : f32       = textureLoad( t_depth, vec2i(floor(coord.xy)), 0 );
-    let albedo   : vec4<f32> = textureLoad( t_albedo, vec2i(floor(coord.xy)), 0 );
-    let metallic : vec4<f32> = textureLoad( t_metallic, vec2i(floor(coord.xy)), 0 );
-    let roughness : f32      = clamp(metallic.g, 0.045, 1.0);
-    let metalness : f32      = clamp(metallic.b, 0.0, 1.0);
+  let g = load_gbuffer(coord);
+  let s = make_surface(g);
+  let mode = u_differd.debug_params.x;
 
-    normal.x = (normal.x + 1.0) * 0.5;
-    normal.y = (normal.y + 1.0) * 0.5;
-    normal.z = (normal.z + 1.0) * 0.5;
+  if (mode == 1.0)
+  {
+    return vec4<f32>(g.normal * 0.5 + 0.5, 1.0);
+  }
+  else if (mode == 2.0)
+  {
+    return vec4<f32>((1.0 - g.depth) * 50.0, 0.0, 0.0, 1.0);
+  }
+  else if (mode == 3.0)
+  {
+    return g.albedo;
+  }
+  else if (mode == 4.0)
+  {
+    return vec4<f32>(vec3<f32>(s.metallic), 1.0);
+  }
+  else if (mode == 5.0)
+  {
+    return vec4<f32>(vec3<f32>(s.roughness), 1.0);
+  }
+  else if (mode == 6.0)
+  {
+    let lighting = pbr_direct_lighting(s.normal, s.view, light_direction(), s.albedo, s.roughness, s.metallic);
+    let shadow_visibility = sample_directional_shadow(s.position, s.normal, light_direction());
+    return vec4<f32>(lighting.specular * light_radiance() * shadow_visibility, 1.0);
+  }
 
-    depth = (1.0 - depth) * 50.0;
-
-    let shading_normal             : vec3<f32> = safe_normalize(textureLoad( t_normal, vec2i(floor(coord.xy)), 0 ).xyz);
-    let light_direction            : vec3<f32> = safe_normalize(-u_differd.directional_light.xyz);
-    let view                       : vec3<f32> = safe_normalize(u_differd.camera_position.xyz - position.xyz);
-    let directional_light_intensity: f32       = max(u_differd.directional_light.w, 0.0);
-    let light_radiance             : f32       = directional_light_intensity;
-    let shadow_visibility          : f32       = sample_directional_shadow(position.xyz, shading_normal, light_direction);
-    let lighting                   : PbrLighting = pbr_direct_lighting(
-      shading_normal,
-      view,
-      light_direction,
-      albedo.rgb,
-      roughness,
-      metalness,
-    );
-
-    // ummm
-    if(u_differd.debug_params.x == 1.0)
-    {
-      return vec4(normal, 1.0);
-    }
-    else if(u_differd.debug_params.x == 2.0)
-    {
-      return vec4(depth, 0.0, 0.0, 1.0);
-    }
-    else if(u_differd.debug_params.x == 3.0)
-    {
-      return albedo;
-    }
-    else if(u_differd.debug_params.x == 4.0)
-    {
-      return vec4(vec3<f32>(metalness), 1.0);
-    }
-    else if(u_differd.debug_params.x == 5.0)
-    {
-      return vec4(vec3<f32>(roughness), 1.0);
-    }
-    else if(u_differd.debug_params.x == 6.0)
-    {
-      return vec4(lighting.specular * light_radiance * shadow_visibility, 1.0);
-    }
-
-    return vec4(depth, 0.0, 0.0, 1.0);
+  return vec4<f32>((1.0 - g.depth) * 50.0, 0.0, 0.0, 1.0);
 }
