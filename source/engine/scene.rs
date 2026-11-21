@@ -1,3 +1,4 @@
+use crate::engine::constant::{GLTF_LOGO_PATH, GLTF_SCENE_TORUS_PATH};
 use crate::types::Shared;
 use crate::{frontend, rendering};
 
@@ -46,6 +47,9 @@ pub struct SceneParameter {
     pub eye_direction: glam::Vec3,
     // light
     pub light_parameters: SceneLightParameter,
+    // scene model
+    pub scene_model: SceneModel,
+    pub requested_scene_model: Option<SceneModel>,
     // rendering config
     pub scene_shading_type: ShadingType,
     pub forward_debug_type: u8,
@@ -70,6 +74,22 @@ pub struct SceneParameter {
     // other config
     pub is_first_update: bool,
     pub is_convert_y_to_z: bool,
+}
+
+#[derive(Clone, Copy, Default, PartialEq)]
+pub enum SceneModel {
+    #[default]
+    Torus,
+    GltfLogo,
+}
+
+impl SceneModel {
+    pub fn path(self) -> &'static str {
+        match self {
+            SceneModel::Torus => GLTF_SCENE_TORUS_PATH,
+            SceneModel::GltfLogo => GLTF_LOGO_PATH,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -136,6 +156,9 @@ impl SceneParameter {
                 directional_light_intensity: 1.0,
                 ambient_light_color: [0.2, 0.2, 0.2, 1.0],
             },
+            // scene model
+            scene_model: SceneModel::default(),
+            requested_scene_model: None,
             // rendering
             scene_shading_type: ShadingType::Differed,
             forward_debug_type: 0,

@@ -1,6 +1,8 @@
 mod widgets;
 
-use crate::engine::scene::{CompositeViewTransform, Scene, ShadingType, ToneMappingType};
+use crate::engine::scene::{
+    CompositeViewTransform, Scene, SceneModel, ShadingType, ToneMappingType,
+};
 use crate::rendering::webgpu::gpu_profiler::{CpuTimings, GpuPassGroup, GpuTimings};
 use crate::types::Shared;
 use widgets::*;
@@ -16,6 +18,11 @@ const AMBIENT_CHANNELS: [(&str, &str, &str, &str, usize); 4] = [
     ("ambient-range-g", "G", "0.0", "1.0", 1),
     ("ambient-range-b", "B", "0.0", "1.0", 2),
     ("ambient-range-intensity", "Intensity", "0.0", "10.0", 3),
+];
+
+const SCENE_MODELS: [(&str, SceneModel); 2] = [
+    ("torus", SceneModel::Torus),
+    ("gltf_logo", SceneModel::GltfLogo),
 ];
 
 const RENDER_TYPES: [(&str, ShadingType); 2] = [
@@ -82,6 +89,11 @@ pub fn update_performance_statistics(
     );
 }
 
+pub fn update_scene_statistics(objects: usize, materials: usize) {
+    update_statistic("objects-analytics-value", &objects.to_string());
+    update_statistic("materials-analytics-value", &materials.to_string());
+}
+
 fn update_statistic(id: &str, value: &str) {
     gloo::utils::document()
         .get_element_by_id(id)
@@ -144,6 +156,16 @@ fn cpu_pass_row_id(index: usize) -> String {
 
 fn environment(parent: &web_sys::Element, scene: &Shared<Scene>) {
     let content = dialog(parent, "environment", "Environment");
+
+    let model = select(
+        "scene-model-select",
+        &SCENE_MODELS,
+        Some(scene.borrow().parameters.scene_model),
+    );
+    on_select(scene, &model, &SCENE_MODELS, |s, v| {
+        s.parameters.requested_scene_model = Some(v);
+    });
+    append(&content, &widget_row("Scene", &[&value_wrapper(&model)]));
 
     let directional = accordion(&content, "directional", "Directional Light", true);
     for (index, &(id, label)) in DIRECTIONAL_AXES.iter().enumerate() {

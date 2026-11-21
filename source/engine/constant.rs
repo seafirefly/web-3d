@@ -4,7 +4,7 @@
 pub const CANVAS_ELEMENT_ID: &str = "canvas";
 
 // scene files (.gltf)
-pub const GLTF_SCENE_TORUS_PATH: &str = "scene/torus/scene_torus.gltf";
+pub const GLTF_SCENE_TORUS_PATH: &str = "scene/torus/torus.gltf";
 pub const GLTF_LOGO_PATH: &str = "scene/gltf_logo/scene.gltf"; 	// from Sketchfab (https://sketchfab.com)
 
 // .hdr files from Poly Haven (https://polyhaven.com/hdris)

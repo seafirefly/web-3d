@@ -20,7 +20,7 @@ pub fn hdr_convertion_pass(
             let sky_hdr_image = global_resources.sky_hdr_image.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let (data, width, height) =
-                    engine::load::load_hdr_file(constant::HDR_KLOPPENHEIM_02).await;
+                    engine::asset_loader::load_hdr_file(constant::HDR_KLOPPENHEIM_02).await;
                 *sky_hdr_image.borrow_mut() = Some(SkyHdrImage {
                     data,
                     width,

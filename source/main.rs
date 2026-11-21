@@ -3,7 +3,8 @@ mod rendering;
 mod types;
 mod frontend;
 
-use crate::rendering::webgpu::{self, WebGPUUniqueResources};
+use crate::engine::scene_loader::{self, SceneLoadSlot};
+use crate::rendering::webgpu::WebGPUUniqueResources;
 use crate::types::Shared;
 use std::cell::RefCell;
 use wasm_bindgen::JsCast;
@@ -63,7 +64,7 @@ pub async fn main() {
 
     // Load .gltf file and initialize scene objects and materials
     let (objects, materials, light_parameters) =
-        engine::load::load_gltf_scene(engine::constant::GLTF_SCENE_TORUS_PATH).await;
+        engine::asset_loader::load_gltf_scene(engine::scene::SceneModel::default().path()).await;
     {
         let mut scene_value = scene.borrow_mut();
         scene_value.objects = objects;
@@ -79,33 +80,7 @@ pub async fn main() {
         rendering::webgpu::init_interface().await;
 
     // Initialize mesh rendering context
-    let object_num: usize = scene.borrow().objects.len();
-    for i in 0..object_num {
-        let is_mesh: bool = scene.borrow().objects.get(i).unwrap().source_mesh.is_some();
-        if is_mesh {
-            let mesh_rendering_resource: Shared<webgpu::WebGPUMeshRenderingResource> = Shared::new(
-                RefCell::new(rendering::webgpu::create_mesh_rendering_resource(
-                    &webgpu_interface,
-                    &scene
-                        .borrow()
-                        .objects
-                        .get(i)
-                        .unwrap()
-                        .source_mesh
-                        .as_ref()
-                        .unwrap()
-                        .borrow(),
-                    &scene.borrow().materials,
-                )),
-            );
-            scene
-                .borrow_mut()
-                .objects
-                .get_mut(i)
-                .unwrap()
-                .mesh_rendering_resource = Some(mesh_rendering_resource);
-        }
-    }
+    scene_loader::create_mesh_rendering_resources(&webgpu_interface, &scene);
 
     // Global shader resources
     let mut material_shader_map: std::collections::HashMap<
@@ -135,6 +110,9 @@ pub async fn main() {
     // Create frontend gui interface
     frontend::gui::create_frontend_gui(&scene);
 
+    // Scene model switching state shared with the async glTF loading task
+    let scene_load_slot: Shared<SceneLoadSlot> = Shared::new(RefCell::new(SceneLoadSlot::default()));
+
     // Rendering loop
     // Fetch the Performance object once, since looking it up from window every frame is costly.
     let performance: web_sys::Performance = web_sys::window()
@@ -147,6 +125,7 @@ pub async fn main() {
     *g.borrow_mut() = Some(wasm_bindgen::closure::Closure::wrap(Box::new(move || {
         let frame_started_at = performance.now();
         engine::scene::update_camera_control(&scene, &control_response_js);
+        scene_loader::update_scene_model(&webgpu_interface, &scene, &scene_load_slot);
 
         rendering::webgpu::update_rendering_main(
             &webgpu_interface,

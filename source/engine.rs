@@ -1,3 +1,4 @@
 pub mod constant;
-pub mod load;
+pub mod asset_loader;
 pub mod scene;
+pub mod scene_loader;
