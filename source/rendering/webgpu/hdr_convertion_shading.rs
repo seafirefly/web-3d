@@ -20,6 +20,7 @@ pub fn update_sky_box(
     scene.borrow_mut().parameters.sky_box_type = sky_box_type;
 
     global_resources.hdr_convertion_resource = None;
+    global_resources.differed_shading_resource = None;
     global_resources.sky_shading_resource = None;
     *global_resources.sky_hdr_image.borrow_mut() = None;
     global_resources.sky_hdr_load_started = false;
@@ -75,6 +76,15 @@ pub fn hdr_convertion_pass(
             &interface,
             sky_hdr_image,
         ));
+        // The differed shading bind groups reference the IBL textures, so they must be rebuilt.
+        global_resources.differed_shading_resource = None;
+
+        let cube_size = global_resources
+            .hdr_convertion_resource
+            .as_ref()
+            .unwrap()
+            .hdr_cube_texture
+            .width();
 
         // Convert hdr to cube pass
         {
@@ -101,8 +111,24 @@ pub fn hdr_convertion_pass(
                 &[],
             );
 
-            let workgroup_count = (512 + 15) / 16;
+            let workgroup_count = (cube_size + 15) / 16;
             convert_pass.dispatch_workgroups(workgroup_count, workgroup_count, 6);
+        }
+
+        // Build the cube mip chain so that the convolutions can sample filtered LODs
+        {
+            let resource = global_resources.hdr_convertion_resource.as_ref().unwrap();
+            for (i, bind_group) in resource.downsample_bind_groups.iter().enumerate() {
+                let mip_size = (cube_size >> (i + 1)).max(1);
+                let dispatch_size = (mip_size + 7) / 8;
+                let mut dpass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("Cube Mip Downsample Pass"),
+                    timestamp_writes: None,
+                });
+                dpass.set_pipeline(&resource.downsample_pipeline);
+                dpass.set_bind_group(0, bind_group, &[]);
+                dpass.dispatch_workgroups(dispatch_size, dispatch_size, 6);
+            }
         }
 
         // Create Irradiance map
@@ -128,9 +154,12 @@ pub fn hdr_convertion_pass(
                 &[],
             );
 
-            // 3.14 / 8 = 4 (ワークグループサイズ 8x8x1 の場合)
-            // 6面分 (z=6) を一気に処理
-            cpass.dispatch_workgroups(1024 / 8, 1024 / 8, 6);
+            // Workgroup size is 8x8x1 and the irradiance map is IRRADIANCE_MAP_SIZE per face; z=6 covers all faces
+            cpass.dispatch_workgroups(
+                IRRADIANCE_MAP_SIZE / 8,
+                IRRADIANCE_MAP_SIZE / 8,
+                6,
+            );
         }
 
         // Create Prefilter map
@@ -177,7 +206,54 @@ pub fn hdr_convertion_pass(
     }
 }
 
+// IBL debug output ------------------------------------------------------------------------------------------
+
+// Draws the irradiance map or a prefilter map mip as a cube cross over the given view (GUI "IBL out").
+pub fn ibl_debug_pass(
+    interface: &WebGPUInterface,
+    scene: &engine::scene::Scene,
+    command_encoder: &mut wgpu::CommandEncoder,
+    global_resources: &WebGPUUniqueResources,
+    view: &wgpu::TextureView,
+) {
+    let debug_type = scene.parameters.ibl_debug_type;
+    let Some(resource) = global_resources.hdr_convertion_resource.as_ref() else {
+        return;
+    };
+    if debug_type == 0 {
+        return;
+    }
+
+    let use_prefilter = if debug_type == 1 { 0.0 } else { 1.0 };
+    let lod = debug_type.saturating_sub(2) as f32;
+    interface.queue.write_buffer(
+        &resource.ibl_debug_uniform_buffer,
+        0,
+        bytemuck::cast_slice(&[use_prefilter, lod, 0.0, 0.0]),
+    );
+
+    let mut pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("IBL Debug Pass"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
+    });
+    pass.set_pipeline(&resource.ibl_debug_pipeline);
+    pass.set_bind_group(0, &resource.ibl_debug_bind_group, &[]);
+    pass.draw(0..3, 0..1);
+}
+
 // HDR conversion shader resource creation and update functions ----------------------------------------------------------------------------
+const IRRADIANCE_MAP_SIZE: u32 = 32;
+
 pub struct SkyHdrImage {
     pub data: Vec<half::f16>,
     pub width: u32,
@@ -198,6 +274,12 @@ pub struct WebGPUHDREnvironmentResource {
     pub prefilter_pipeline: wgpu::ComputePipeline,
     pub prefilter_cubemap_bind_group: wgpu::BindGroup,
     pub prefilter_bind_groups: Vec<wgpu::BindGroup>,
+    pub downsample_pipeline: wgpu::ComputePipeline,
+    // Index i writes cube mip i + 1 from mip i
+    pub downsample_bind_groups: Vec<wgpu::BindGroup>,
+    pub ibl_debug_pipeline: wgpu::RenderPipeline,
+    pub ibl_debug_bind_group: wgpu::BindGroup,
+    pub ibl_debug_uniform_buffer: wgpu::Buffer,
 }
 
 fn create_hdr_conversion_shader_resource(
@@ -235,14 +317,16 @@ fn create_hdr_conversion_shader_resource(
     );
     let hdr_texture_view = sky_hdr_texture.create_view(&Default::default());
 
+    let cube_size = sky_hdr_image.height / 2;
+    let cube_mip_count = 32 - cube_size.leading_zeros();
     let hdr_cube_texture = interface.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Cube Target"),
         size: wgpu::Extent3d {
-            width: sky_hdr_image.height / 2,
-            height: sky_hdr_image.height / 2,
+            width: cube_size,
+            height: cube_size,
             depth_or_array_layers: 6,
         },
-        mip_level_count: 1,
+        mip_level_count: cube_mip_count,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba16Float, // HDR精度を維持
@@ -257,12 +341,12 @@ fn create_hdr_conversion_shader_resource(
         ..Default::default()
     });
 
-    // 1. Irradiance Map (32x32で十分)
+    // 1. Irradiance Map (low resolution is sufficient for diffuse lighting)
     let irradiance_map = interface.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Irradiance Map"),
         size: wgpu::Extent3d {
-            width: 1024,
-            height: 1024,
+            width: IRRADIANCE_MAP_SIZE,
+            height: IRRADIANCE_MAP_SIZE,
             depth_or_array_layers: 6,
         },
         mip_level_count: 1,
@@ -293,6 +377,8 @@ fn create_hdr_conversion_shader_resource(
 
     let cube_storage_view = hdr_cube_texture.create_view(&wgpu::TextureViewDescriptor {
         dimension: Some(wgpu::TextureViewDimension::D2Array),
+        base_mip_level: 0,
+        mip_level_count: Some(1),
         ..Default::default()
     });
 
@@ -379,6 +465,50 @@ fn create_hdr_conversion_shader_resource(
         dimension: Some(wgpu::TextureViewDimension::Cube), // ここをCubeにする！
         ..Default::default()
     });
+
+    // Mip chain generation for the cube (mip 0 is written by the convert pass)
+    let downsample_pipeline =
+        interface
+            .device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("Cube Downsample Pipeline"),
+                layout: None,
+                module: &shader,
+                entry_point: Some("cs_downsample_main"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
+    let mut downsample_bind_groups = Vec::new();
+    for mip in 1..cube_mip_count {
+        let src_view = hdr_cube_texture.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            base_mip_level: mip - 1,
+            mip_level_count: Some(1),
+            ..Default::default()
+        });
+        let dst_view = hdr_cube_texture.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            base_mip_level: mip,
+            mip_level_count: Some(1),
+            ..Default::default()
+        });
+        downsample_bind_groups.push(interface.device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                label: Some("Cube Downsample Bind Group"),
+                layout: &downsample_pipeline.get_bind_group_layout(0),
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::TextureView(&src_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: wgpu::BindingResource::TextureView(&dst_view),
+                    },
+                ],
+            },
+        ));
+    }
 
     let irradiance_pipeline =
         interface
@@ -492,6 +622,83 @@ fn create_hdr_conversion_shader_resource(
         prefilter_bind_groups.push(bind_group);
     }
 
+    let ibl_debug_shader = interface
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("IBL Debug Shader"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+                "../../shader/ibl_debug.wgsl"
+            ))),
+        });
+    let ibl_debug_pipeline =
+        interface
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("IBL Debug Pipeline"),
+                layout: None,
+                vertex: wgpu::VertexState {
+                    module: &ibl_debug_shader,
+                    entry_point: Some("vs_main"),
+                    compilation_options: Default::default(),
+                    buffers: &[],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &ibl_debug_shader,
+                    entry_point: Some("fs_main"),
+                    compilation_options: Default::default(),
+                    targets: &[Some(interface.intermediate_texture.format().into())],
+                }),
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+                cache: None,
+            });
+
+    let ibl_debug_uniform_buffer =
+        interface
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("IBL Debug Uniform Buffer"),
+                contents: bytemuck::cast_slice(&[0.0f32; 4]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+
+    let ibl_debug_bind_group = interface
+        .device
+        .create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("IBL Debug Bind Group"),
+            layout: &ibl_debug_pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&irradiance_map.create_view(
+                        &wgpu::TextureViewDescriptor {
+                            dimension: Some(wgpu::TextureViewDimension::Cube),
+                            ..Default::default()
+                        },
+                    )),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&prefilter_map.create_view(
+                        &wgpu::TextureViewDescriptor {
+                            dimension: Some(wgpu::TextureViewDimension::Cube),
+                            ..Default::default()
+                        },
+                    )),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&hdr_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: ibl_debug_uniform_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
     return WebGPUHDREnvironmentResource {
         _shader: shader,
         _sky_hdr_texture: sky_hdr_texture,
@@ -505,5 +712,10 @@ fn create_hdr_conversion_shader_resource(
         prefilter_pipeline,
         prefilter_cubemap_bind_group,
         prefilter_bind_groups,
+        downsample_pipeline,
+        downsample_bind_groups,
+        ibl_debug_pipeline,
+        ibl_debug_bind_group,
+        ibl_debug_uniform_buffer,
     };
 }

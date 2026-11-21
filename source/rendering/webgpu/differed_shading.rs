@@ -231,7 +231,14 @@ pub fn differed_shading_pass(
             let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::Lighting);
             let scene_value = scene;
             let is_debug_out = scene.parameters.differed_debug_type != 0;
-            let is_use_ibl = false; // TODO: Implement IBL
+            let is_use_ibl = scene.parameters.is_use_sky_box
+                && scene.parameters.is_use_environment_map
+                && global_resources
+                    .differed_shading_resource
+                    .as_ref()
+                    .unwrap()
+                    .ibl_render_pipeline
+                    .is_some();
 
             // render pass setup
             let mut differed_shading_pass: wgpu::RenderPass<'_> = command_encoder

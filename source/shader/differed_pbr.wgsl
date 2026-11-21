@@ -65,6 +65,16 @@ fn diffuse_burley(n_dot_l: f32, n_dot_v: f32, h_dot_v: f32, roughness: f32) -> f
     return f_l * f_v / PI;
 }
 
+fn env_brdf_approx(roughness : f32, n_dot_v : f32) -> vec2<f32>
+{
+  // Karis' analytic approximation of the split-sum BRDF LUT
+  let c0 = vec4<f32>(-1.0, -0.0275, -0.572, 0.022);
+  let c1 = vec4<f32>(1.0, 0.0425, 1.04, -0.04);
+  let r = roughness * c0 + c1;
+  let a004 = min(r.x * r.x, exp2(-9.28 * n_dot_v)) * r.x + r.y;
+  return vec2<f32>(-1.04, 1.04) * a004 + r.zw;
+}
+
 fn safe_normalize(v : vec3<f32>) -> vec3<f32>
 {
   let len2 = dot(v, v);
@@ -286,17 +296,22 @@ fn fs_ibl_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
   );
   let direct_color                : vec3<f32> = lighting.direct;
 
-    let irradiance = textureSample(t_irradiance, s_env, normal);
-  let diffuse_ibl = irradiance.rgb * albedo.rgb * (1.0 - metallic);
-  let ambient_diffuse : vec3<f32> = pbr_ambient_diffuse_lighting(
-    normal,
-    view,
-    albedo.rgb,
-    metallic,
-    u_differd.ambient_light.rgb * max(u_differd.ambient_light.w, 0.0),
-  );
+  let n_dot_v : f32 = max(dot(normal, view), 0.0);
+  let f0 : vec3<f32> = mix(vec3<f32>(0.04, 0.04, 0.04), albedo.rgb, vec3<f32>(metallic, metallic, metallic));
+  let fresnel : vec3<f32> = fresnel_schlick(n_dot_v, f0);
+  let kd : vec3<f32> = (vec3<f32>(1.0, 1.0, 1.0) - fresnel) * (1.0 - metallic);
 
-  var frag_color = vec4<f32>(direct_color * light_radiance * shadow_visibility + diffuse_ibl + ambient_diffuse, albedo.a);
+  // Irradiance map stores the cosine-weighted average radiance, so it is used without an extra 1/PI
+  let irradiance : vec3<f32> = textureSample(t_irradiance, s_env, normal).rgb;
+  let diffuse_ibl : vec3<f32> = kd * albedo.rgb * irradiance;
+
+  // Prefilter map has 5 mips (roughness 0..1 mapped to mip 0..4)
+  let reflect_dir : vec3<f32> = reflect(-view, normal);
+  let prefiltered : vec3<f32> = textureSampleLevel(t_prefilter, s_env, reflect_dir, roughness * 4.0).rgb;
+  let env_brdf : vec2<f32> = env_brdf_approx(roughness, n_dot_v);
+  let specular_ibl : vec3<f32> = prefiltered * (f0 * env_brdf.x + vec3<f32>(env_brdf.y));
+
+  var frag_color = vec4<f32>(direct_color * light_radiance * shadow_visibility + diffuse_ibl + specular_ibl, albedo.a);
     return frag_color;
 }
 

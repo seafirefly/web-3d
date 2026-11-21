@@ -12,6 +12,10 @@ struct SpecularArgs { roughness: f32 };
 @group(2) @binding(0) var<uniform> args : SpecularArgs;
 @group(2) @binding(1) var out_prefilter : texture_storage_2d_array<rgba16float, write>;
 
+// Mip chain generation for the HDR cube
+@group(0) @binding(3) var mip_src: texture_2d_array<f32>;
+@group(0) @binding(4) var mip_dst: texture_storage_2d_array<rgba16float, write>;
+
 const PI: f32 = 3.14159265359;
 
 // キューブマップのピクセル座標・面番号・サイズから方向ベクトルを返す関数
@@ -54,6 +58,26 @@ fn cs_convertion_main(@builtin(global_invocation_id) id: vec3u)
     textureStore(out_cube, id.xy, face, color);
 }
 
+
+// 2x2 box filter from the previous mip level
+@compute @workgroup_size(8, 8, 1)
+fn cs_downsample_main(@builtin(global_invocation_id) id: vec3u)
+{
+    let dst_size = textureDimensions(mip_dst).xy;
+    if (any(id.xy >= dst_size)) { return; }
+
+    let src_max = vec2i(textureDimensions(mip_src).xy) - 1;
+    let base = vec2i(id.xy) * 2;
+    let face = i32(id.z);
+    var sum = vec4f(0.0);
+    for (var y = 0; y < 2; y++) {
+        for (var x = 0; x < 2; x++) {
+            let coord = clamp(base + vec2i(x, y), vec2i(0), src_max);
+            sum += textureLoad(mip_src, coord, face, 0);
+        }
+    }
+    textureStore(mip_dst, id.xy, id.z, sum * 0.25);
+}
 
 fn hammersley(i: u32, n: u32) -> vec2f 
 {
@@ -99,6 +123,15 @@ fn sample_cosine_weighted(xi: vec2f, n: vec3f) -> vec3f {
     return tangent_sample.x * right + tangent_sample.y * up + tangent_sample.z * n;
 }
 
+// Mip level to sample for a sample with the given pdf (GPU Gems 3 filtered importance sampling)
+fn sample_lod(pdf: f32, sample_count: u32) -> f32 {
+    let face_size = f32(textureDimensions(env_cube, 0).x);
+    let texel_solid_angle = 4.0 * PI / (6.0 * face_size * face_size);
+    let sample_solid_angle = 1.0 / (f32(sample_count) * max(pdf, 1e-6));
+    let max_lod = f32(textureNumLevels(env_cube) - 1u);
+    return clamp(0.5 * log2(sample_solid_angle / texel_solid_angle) + 1.0, 0.0, max_lod);
+}
+
 fn random01_from_u32(seed: u32) -> f32 {
     var x = seed;
     x ^= x >> 16u;
@@ -129,10 +162,12 @@ fn cs_irradiance_main(@builtin(global_invocation_id) id: vec3u)
     for (var i = 0u; i < sample_count; i++)
     {
         let xi = hammersley(i, sample_count);
-        let xi_rot = fract(xi + texel_offset) / 1000.0;
+        let xi_rot = fract(xi + texel_offset);
         let sample_vec = sample_cosine_weighted(xi_rot, normal);
         
-        irradiance += textureSampleLevel(env_cube, samp, sample_vec, 0.0).rgb;
+        let pdf = max(dot(normal, sample_vec), 0.0) / PI;
+        let lod = sample_lod(pdf, sample_count);
+        irradiance += textureSampleLevel(env_cube, samp, sample_vec, lod).rgb;
     }
 
     textureStore(out_irradiance, id.xy, id.z, vec4f(irradiance / f32(sample_count), 1.0));
@@ -156,7 +191,15 @@ fn cs_prefilter_main(@builtin(global_invocation_id) id: vec3u)
 
         let n_dot_l = max(dot(n, l), 0.0);
         if (n_dot_l > 0.0) {
-            prefiltered_color += textureSampleLevel(env_cube, samp, l, 0.0).rgb * n_dot_l;
+            // GGX D term divided by 4 is the pdf of l when V = N
+            let alpha = args.roughness * args.roughness;
+            let alpha2 = alpha * alpha;
+            let n_dot_h = max(dot(n, h), 0.0);
+            let denom = n_dot_h * n_dot_h * (alpha2 - 1.0) + 1.0;
+            let pdf = alpha2 / (PI * denom * denom) / 4.0;
+            // Roughness 0 keeps the source resolution
+            let lod = select(sample_lod(pdf, sample_count), 0.0, args.roughness < 1e-3);
+            prefiltered_color += textureSampleLevel(env_cube, samp, l, lod).rgb * n_dot_l;
             total_weight += n_dot_l;
         }
     }

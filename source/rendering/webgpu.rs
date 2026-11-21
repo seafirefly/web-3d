@@ -307,6 +307,15 @@ pub fn update_rendering_main(
         copy_intermediate_2_to_main(interface, &mut main_command_encoder);
     }
 
+    // [Debug] IBL output (irradiance / prefilter map) replaces the scene image
+    hdr_convertion_shading::ibl_debug_pass(
+        interface,
+        scene,
+        &mut main_command_encoder,
+        global_resources,
+        &intermediate_view,
+    );
+
     // [Post-process] Bloom pass
     if scene.parameters.is_use_bloom {
         bloom_shading::bloom_pass(

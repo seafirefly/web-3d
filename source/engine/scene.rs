@@ -61,6 +61,9 @@ pub struct SceneParameter {
     pub is_use_sky_box: bool,
     pub sky_box_type: SkyBoxType,
     pub requested_sky_box_type: Option<SkyBoxType>,
+    pub is_use_environment_map: bool,
+    // 0: off, 1: irradiance map, 2..=6: prefilter map mip 0..=4
+    pub ibl_debug_type: u8,
     // postprocess
     pub is_use_bloom: bool,
     pub bloom_threshold: f32,
@@ -188,6 +191,8 @@ impl SceneParameter {
             is_use_sky_box: true,
             sky_box_type: SkyBoxType::default(),
             requested_sky_box_type: None,
+            is_use_environment_map: true,
+            ibl_debug_type: 0,
             // postprocess
             is_use_bloom: false,
             bloom_threshold: 1.5,

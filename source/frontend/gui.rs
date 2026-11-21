@@ -47,6 +47,16 @@ const BUFFER_TYPES: [(&str, u8); 7] = [
     ("specular", 6),
 ];
 
+const IBL_DEBUG_TYPES: [(&str, u8); 7] = [
+    ("off", 0),
+    ("irradiance", 1),
+    ("prefilter 0", 2),
+    ("prefilter 1", 3),
+    ("prefilter 2", 4),
+    ("prefilter 3", 5),
+    ("prefilter 4", 6),
+];
+
 const TONE_MAPPINGS: [(&str, ToneMappingType); 4] = [
     ("off", ToneMappingType::Off),
     ("aces", ToneMappingType::Aces),
@@ -331,6 +341,7 @@ fn skybox(parent: &web_sys::Element, scene: &Shared<Scene>) {
         }),
     );
 
+    let environment_map_checked = scene.borrow().parameters.is_use_environment_map;
     let sky_box = select(
         "sky-box-select",
         &SKY_BOX_TYPES,
@@ -340,6 +351,29 @@ fn skybox(parent: &web_sys::Element, scene: &Shared<Scene>) {
         s.parameters.requested_sky_box_type = Some(v);
     });
     append(&content, &widget_row("File", &[&value_wrapper(&sky_box)]));
+
+    append(
+        &content,
+        &checkbox_row(
+            scene,
+            "Env Map",
+            "environment-map-active",
+            environment_map_checked,
+            |s, v| {
+                s.parameters.is_use_environment_map = v;
+            },
+        ),
+    );
+
+    let ibl_debug = select(
+        "ibl-debug-select",
+        &IBL_DEBUG_TYPES,
+        Some(scene.borrow().parameters.ibl_debug_type),
+    );
+    on_select(scene, &ibl_debug, &IBL_DEBUG_TYPES, |s, v| {
+        s.parameters.ibl_debug_type = v;
+    });
+    append(&content, &widget_row("IBL out", &[&value_wrapper(&ibl_debug)]));
 }
 
 fn postprocess(parent: &web_sys::Element, scene: &Shared<Scene>) {
