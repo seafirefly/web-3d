@@ -269,7 +269,7 @@ fn base_pass(parent: &web_sys::Element, scene: &Shared<Scene>) {
     }
     append(&content, &widget_row("Rendering type", &[&render_type]));
 
-    let forward_shading = select("forward-type-select", &[("phong", 0u8)], Some(0u8));
+    let forward_shading = select("forward-type-select", &[("pbr", 0u8)], Some(0u8));
     append(
         &forward_wrapper,
         &widget_row("shading", &[&forward_shading]),

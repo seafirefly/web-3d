@@ -19,20 +19,20 @@ pub fn forward_shading_pass(
     view: &wgpu::TextureView,
     global_resources: &mut WebGPUUniqueResources,
 ) {
-    // Update phong resources
+    // Update pbr resources
     let _cpu = interface.gpu_profiler.cpu_scope(GpuPassGroup::BasePass);
     {
         let shadow_resource = global_resources.shadow_resource.as_ref().unwrap();
         let light_view_projection = shadow_resource.light_view_projection;
-        let phong_shader_context: &WebGPUShaderContext = &shader_map
-            .entry("Phong".to_string())
-            .or_insert_with(|| create_phong_shader_context(&interface, shadow_resource));
+        let pbr_shader_context: &WebGPUShaderContext = &shader_map
+            .entry("ForwardPbr".to_string())
+            .or_insert_with(|| create_forward_pbr_shader_context(&interface, shadow_resource));
 
         for scene_object in scene.objects.iter() {
             if scene_object.mesh_rendering_resource.is_some() {
-                update_phong_shading_resource(
+                update_forward_pbr_shading_resource(
                     &interface,
-                    &phong_shader_context,
+                    &pbr_shader_context,
                     scene,
                     &scene_object,
                     light_view_projection,
@@ -84,10 +84,10 @@ pub fn forward_shading_pass(
 
     // Rendering forward shading
     {
-        let phong_shader_context: &WebGPUShaderContext =
-            &shader_map.get("Phong").expect("Phong shader is not exist");
+        let pbr_shader_context: &WebGPUShaderContext =
+            &shader_map.get("ForwardPbr").expect("ForwardPbr shader is not exist");
 
-        forward_shading_pass.set_pipeline(&phong_shader_context.render_pipeline);
+        forward_shading_pass.set_pipeline(&pbr_shader_context.render_pipeline);
 
         for object in scene.objects.iter() {
             if object.mesh_rendering_resource.is_none() {
@@ -116,7 +116,7 @@ pub fn forward_shading_pass(
             );
             forward_shading_pass.set_bind_group(
                 2,
-                phong_shader_context._bind_group_3.as_ref().unwrap(),
+                pbr_shader_context._bind_group_3.as_ref().unwrap(),
                 &[],
             );
             forward_shading_pass.set_index_buffer(
@@ -153,9 +153,9 @@ pub fn forward_shading_pass(
     };
 }
 
-// Phong Shading -----------------------------------------------------------------------------
+// Forward PBR Shading -----------------------------------------------------------------------
 
-struct PhongUniform {
+struct PbrUniform {
     _model_matrix: [f32; 16],
     _transform_matrix: [f32; 16],
     _rotation_matrix: [f32; 16],
@@ -164,9 +164,10 @@ struct PhongUniform {
     _inverse_matrix: [f32; 16],
     _light_view_projection: [f32; 16],
     _buffer_type: [f32; 4],
+    _camera_position: [f32; 4],
 }
 
-pub fn create_phong_shader_context(
+pub fn create_forward_pbr_shader_context(
     interface: &WebGPUInterface,
     shadow_resource: &shadow::WebGPUShadowResource,
 ) -> WebGPUShaderContext {
@@ -175,8 +176,10 @@ pub fn create_phong_shader_context(
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
-                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                    "../../shader/forward_phong.wgsl"
+                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(concat!(
+                    include_str!("../../shader/pbr_common.wgsl"),
+                    "\n",
+                    include_str!("../../shader/forward_pbr.wgsl"),
                 ))),
             });
 
@@ -208,7 +211,7 @@ pub fn create_phong_shader_context(
         ],
     }];
 
-    let uniform_size: u64 = std::mem::size_of::<PhongUniform>() as u64;
+    let uniform_size: u64 = std::mem::size_of::<PbrUniform>() as u64;
     let bind_group_layout: wgpu::BindGroupLayout =
         interface
             .device
@@ -263,6 +266,22 @@ pub fn create_phong_shader_context(
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 5,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
                 ],
                 label: Some("bind_group_layout_2"),
             });
@@ -292,7 +311,7 @@ pub fn create_phong_shader_context(
     );
 
     let bind_group_3 = interface.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("Phong shadow bind group"),
+        label: Some("ForwardPbr shadow bind group"),
         layout: &bind_group_layout_3,
         entries: &[
             wgpu::BindGroupEntry {
@@ -355,7 +374,7 @@ pub fn create_phong_shader_context(
             });
 
     return WebGPUShaderContext {
-        _shader_name: "Phong".to_string(),
+        _shader_name: "ForwardPbr".to_string(),
         bind_group_layout: bind_group_layout,
         _bind_group_layout_2: Some(bind_group_layout_2),
         _bind_group_3: Some(bind_group_3),
@@ -364,7 +383,7 @@ pub fn create_phong_shader_context(
     };
 }
 
-fn update_phong_shading_resource(
+fn update_forward_pbr_shading_resource(
     interface: &WebGPUInterface,
     shader_resource: &WebGPUShaderContext,
     scene: &engine::scene::Scene,
@@ -425,7 +444,7 @@ fn update_phong_shading_resource(
     // Initialize uniform buffer
     if is_need_initialize {
         let uniform_buf: wgpu::Buffer = interface.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("[Phong] Uniform Buffer"),
+            label: Some("[ForwardPbr] Uniform Buffer"),
             size: shader_resource.uniform_size,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -529,6 +548,32 @@ fn update_phong_shading_resource(
                                 .unwrap(),
                         ),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: wgpu::BindingResource::TextureView(
+                            &object
+                                .mesh_rendering_resource
+                                .as_ref()
+                                .unwrap()
+                                .borrow()
+                                .metallic_roughness_texture_view
+                                .as_ref()
+                                .unwrap(),
+                        ),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 5,
+                        resource: wgpu::BindingResource::Sampler(
+                            &object
+                                .mesh_rendering_resource
+                                .as_ref()
+                                .unwrap()
+                                .borrow()
+                                .metallic_roughness_texture_sampler
+                                .as_ref()
+                                .unwrap(),
+                        ),
+                    },
                 ],
                 label: Some("texture_bind_group"),
             });
@@ -588,7 +633,9 @@ fn update_phong_shading_resource(
         uniform_total.splice(0..0, model_matrix.to_cols_array());
         uniform_total.extend_from_slice(&rotaton_matrix.to_cols_array().to_vec());
         uniform_total.extend_from_slice(&directional.to_array());
-        uniform_total.extend_from_slice(&[0.0]); // Padding!
+        let directional_intensity: f32 =
+            scene_value.parameters.light_parameters.directional_light_intensity;
+        uniform_total.extend_from_slice(&[directional_intensity]);
         uniform_total.extend_from_slice(&ambient);
         uniform_total.extend_from_slice(&inverse_projection.to_cols_array().to_vec());
         uniform_total.extend_from_slice(&light_view_projection.to_cols_array());
@@ -598,6 +645,7 @@ fn update_phong_shading_resource(
             0.0,
             0.0,
         ]);
+        uniform_total.extend_from_slice(&[eye.x, eye.y, eye.z, 1.0]);
 
         let uniform_ref: &[f32] = uniform_total.as_ref();
         interface.queue.write_buffer(
