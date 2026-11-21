@@ -56,20 +56,22 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32>
     // 3. グリッドの描画 (1m単位)
     // fwidth() で画面上の 1px あたりのワールド単位を取得し、
     // カメラ距離に関わらず見た目の太さを一定にする。
+    // 軸ごとの1pxあたりのワールド長を使う (grazing angle で片軸の線が太くなるのを防ぐ)
     let grid_size  = 1.0;
     let line_width_pixels = in_uniform.line_thickness;
-    let coord_step = max(fwidth(coord.x), fwidth(coord.y));
-    let line_width = max(coord_step * line_width_pixels, 1e-5);
-    let grid = abs(fract(coord / grid_size - 0.5) - 0.5) / (line_width * 0.5);
-    var line = min(grid.x, grid.y);
-    
-    // 線の鋭さを滑らかにする
-    let color_mask = 1.0 - floor(smoothstep(0.0, 1.0, line));
+    let coord_step = max(fwidth(coord), vec2f(1e-5));
+    let half_width = coord_step * line_width_pixels * 0.5;
+    let dist = abs(fract(coord / grid_size - 0.5) - 0.5) / half_width;
+    let line = min(dist.x, dist.y);
+
+    // アンチエイリアス: 線の中心から半幅以内で 1, 外側へ 1 半幅分かけて 0 へ
+    let color_mask = 1.0 - clamp(line, 0.0, 1.0);
 
     // 4. 軸の色付け (X軸=赤, Y軸=緑)
+    let axis_width = coord_step * line_width_pixels;
     var grid_color = vec3f(0.3); // 通常の線はグレー
-    if (abs(coord.y) < line_width) { grid_color = vec3f(1.0, 0.0, 0.0); } // X軸
-    if (abs(coord.x) < line_width) { grid_color = vec3f(0.0, 1.0, 0.0); } // Y軸
+    if (abs(coord.y) < axis_width.y) { grid_color = vec3f(1.0, 0.0, 0.0); } // X軸
+    if (abs(coord.x) < axis_width.x) { grid_color = vec3f(0.0, 1.0, 0.0); } // Y軸
 
     // 距離に応じてフェードアウト（遠くのノイズを防ぐ）
     let opacity = color_mask * exp(-0.15 * t);
