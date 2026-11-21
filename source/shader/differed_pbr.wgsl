@@ -56,15 +56,6 @@ fn fresnel_schlick(cos_theta :f32, f0 : vec3<f32>) -> vec3<f32>
     return f0 + (1.0 - f0) * pow(1.0 - cos_theta, 5.0);
 }
 
-// Burley (Disney) diffuse — Blender Principled BSDF diffuse lobe
-fn diffuse_burley(n_dot_l: f32, n_dot_v: f32, h_dot_v: f32, roughness: f32) -> f32
-{
-    let fd90 = 0.5 + 2.0 * roughness * h_dot_v * h_dot_v;
-    let f_l  = 1.0 + (fd90 - 1.0) * pow(1.0 - n_dot_l, 5.0);
-    let f_v  = 1.0 + (fd90 - 1.0) * pow(1.0 - n_dot_v, 5.0);
-    return f_l * f_v / PI;
-}
-
 fn env_brdf_approx(roughness : f32, n_dot_v : f32) -> vec2<f32>
 {
   // Karis' analytic approximation of the split-sum BRDF LUT
@@ -120,7 +111,7 @@ fn pbr_direct_lighting(
 
   let ks = fresnel;
   let kd = (vec3<f32>(1.0, 1.0, 1.0) - ks) * (1.0 - metallic);
-  let diffuse = kd * albedo * diffuse_burley(n_dot_l, n_dot_v, h_dot_v, roughness);
+  let diffuse = kd * albedo / PI;
   let specular_contrib = specular * n_dot_l;
 
   return PbrLighting((diffuse + specular) * n_dot_l, specular_contrib);
@@ -140,12 +131,7 @@ fn pbr_ambient_diffuse_lighting(
   let fresnel = fresnel_schlick(n_dot_v, f0);
   let kd = (vec3<f32>(1.0, 1.0, 1.0) - fresnel) * (1.0 - metallic);
 
-  // Hemispherical weighting approximates "light coming from the environment"
-  // instead of a flat additive term.
-  let hemi = normal.z * 0.5 + 0.5;
-  let hemi_weight = mix(0.1, 1.0, clamp(hemi, 0.0, 1.0));
-
-  return kd * albedo * ambient_irradiance * hemi_weight / PI;
+  return kd * albedo * ambient_irradiance / PI;
 }
 
 fn sample_directional_shadow(
@@ -322,34 +308,28 @@ fn fs_debug_main( @builtin(position) coord : vec4f ) -> @location(0) vec4f
 {
   let g = load_gbuffer(coord);
   let s = make_surface(g);
-  let mode = u_differd.debug_params.x;
+  let mode = u32(u_differd.debug_params.x);
 
-  if (mode == 1.0)
-  {
-    return vec4<f32>(g.normal * 0.5 + 0.5, 1.0);
+  switch (mode) {
+    case 1u: {
+      return vec4<f32>(g.normal * 0.5 + 0.5, 1.0);
+    }
+    case 3u: {
+      return g.albedo;
+    }
+    case 4u: {
+      return vec4<f32>(vec3<f32>(s.metallic), 1.0);
+    }
+    case 5u: {
+      return vec4<f32>(vec3<f32>(s.roughness), 1.0);
+    }
+    case 6u: {
+      let lighting = pbr_direct_lighting(s.normal, s.view, light_direction(), s.albedo, s.roughness, s.metallic);
+      let shadow_visibility = sample_directional_shadow(s.position, s.normal, light_direction());
+      return vec4<f32>(lighting.specular * light_radiance() * shadow_visibility, 1.0);
+    }
+    default: {
+      return vec4<f32>((1.0 - g.depth) * 50.0, 0.0, 0.0, 1.0);
+    }
   }
-  else if (mode == 2.0)
-  {
-    return vec4<f32>((1.0 - g.depth) * 50.0, 0.0, 0.0, 1.0);
-  }
-  else if (mode == 3.0)
-  {
-    return g.albedo;
-  }
-  else if (mode == 4.0)
-  {
-    return vec4<f32>(vec3<f32>(s.metallic), 1.0);
-  }
-  else if (mode == 5.0)
-  {
-    return vec4<f32>(vec3<f32>(s.roughness), 1.0);
-  }
-  else if (mode == 6.0)
-  {
-    let lighting = pbr_direct_lighting(s.normal, s.view, light_direction(), s.albedo, s.roughness, s.metallic);
-    let shadow_visibility = sample_directional_shadow(s.position, s.normal, light_direction());
-    return vec4<f32>(lighting.specular * light_radiance() * shadow_visibility, 1.0);
-  }
-
-  return vec4<f32>((1.0 - g.depth) * 50.0, 0.0, 0.0, 1.0);
 }
