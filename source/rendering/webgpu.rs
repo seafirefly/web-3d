@@ -216,18 +216,6 @@ pub async fn init_interface<'a>() -> WebGPUInterface<'a> {
     return interface;
 }
 
-/// Create shader context for a shader. It creates render pipeline and bind group layout for the shader.
-pub fn create_shader_context(interface: &WebGPUInterface, name: &str) -> WebGPUShaderContext {
-    match name {
-        "DifferedGBuffer" => {
-            return differed_shading::create_differed_gbuffer_shader_context(interface);
-        }
-        _ => {
-            return differed_shading::create_differed_gbuffer_shader_context(interface);
-        }
-    }
-}
-
 /// Main rendering function. It is called in each frame and updates rendering resources and executes render pass.
 pub fn update_rendering_main(
     interface: &WebGPUInterface,
