@@ -12,6 +12,7 @@ pub struct SceneLoadSlot {
         engine::scene::SceneModel,
         Vec<engine::scene::SceneObject>,
         Vec<engine::scene::SceneMaterial>,
+        engine::scene::SceneLightParameter,
     )>,
 }
 
@@ -51,12 +52,14 @@ fn apply_loaded_scene(
     model: engine::scene::SceneModel,
     objects: Vec<engine::scene::SceneObject>,
     materials: Vec<engine::scene::SceneMaterial>,
+    light_parameters: engine::scene::SceneLightParameter,
 ) {
     {
         let mut scene_value = scene.borrow_mut();
         scene_value.objects = objects;
         scene_value.materials = materials;
         scene_value.parameters.scene_model = model;
+        scene_value.parameters.light_parameters = light_parameters;
     }
     engine::scene::batch_objects(scene);
     create_mesh_rendering_resources(interface, scene);
@@ -77,9 +80,16 @@ pub fn update_scene_model(
     load_slot: &Shared<SceneLoadSlot>,
 ) {
     let finished = load_slot.borrow_mut().finished.take();
-    if let Some((model, objects, materials)) = finished {
+    if let Some((model, objects, materials, light_parameters)) = finished {
         load_slot.borrow_mut().loading = false;
-        apply_loaded_scene(interface, scene, model, objects, materials);
+        apply_loaded_scene(
+            interface,
+            scene,
+            model,
+            objects,
+            materials,
+            light_parameters,
+        );
     }
 
     if load_slot.borrow().loading {
@@ -95,7 +105,8 @@ pub fn update_scene_model(
     load_slot.borrow_mut().loading = true;
     let load_slot = load_slot.clone();
     wasm_bindgen_futures::spawn_local(async move {
-        let (objects, materials, _) = engine::asset_loader::load_gltf_scene(model.path()).await;
-        load_slot.borrow_mut().finished = Some((model, objects, materials));
+        let (objects, materials, light_parameters) =
+            engine::asset_loader::load_gltf_scene(model.path()).await;
+        load_slot.borrow_mut().finished = Some((model, objects, materials, light_parameters));
     });
 }

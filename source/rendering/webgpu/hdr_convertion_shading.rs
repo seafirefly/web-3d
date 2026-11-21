@@ -1,30 +1,66 @@
 use wgpu::util::DeviceExt;
 
-use crate::engine::{self, constant};
+use crate::engine::{self, scene::SkyBoxType};
 use crate::rendering::webgpu::{WebGPUInterface, WebGPUUniqueResources};
+use crate::types::Shared;
+
+// Sky box selection ------------------------------------------------------------------------------------------
+
+// Applies a sky box change requested from the GUI. The HDR is reloaded and converted by the next pass.
+pub fn update_sky_box(
+    scene: &Shared<engine::scene::Scene>,
+    global_resources: &mut WebGPUUniqueResources,
+) {
+    let Some(sky_box_type) = scene.borrow_mut().parameters.requested_sky_box_type.take() else {
+        return;
+    };
+    if sky_box_type == scene.borrow().parameters.sky_box_type {
+        return;
+    }
+    scene.borrow_mut().parameters.sky_box_type = sky_box_type;
+
+    global_resources.hdr_convertion_resource = None;
+    global_resources.sky_shading_resource = None;
+    *global_resources.sky_hdr_image.borrow_mut() = None;
+    global_resources.sky_hdr_load_started = false;
+}
 
 // HDR conversion pass --------------------------------------------------------------------------------------
 
 pub fn hdr_convertion_pass(
     interface: &WebGPUInterface,
-    _scene: &engine::scene::Scene,
+    scene: &engine::scene::Scene,
     command_encoder: &mut wgpu::CommandEncoder,
     global_resources: &mut WebGPUUniqueResources,
 ) {
     // Create sky shader resource and convert HDR to cube texture on the first update
     let is_first_update = global_resources.hdr_convertion_resource.is_none();
     if is_first_update {
+        let sky_box_type = scene.parameters.sky_box_type;
+
+        // Discard an image loaded for a sky box that is no longer selected (its load may have finished late)
+        let is_stale = global_resources
+            .sky_hdr_image
+            .borrow()
+            .as_ref()
+            .is_some_and(|image| image.sky_box_type != sky_box_type);
+        if is_stale {
+            *global_resources.sky_hdr_image.borrow_mut() = None;
+            global_resources.sky_hdr_load_started = false;
+        }
+
         // The HDR file is loaded asynchronously on the first update. Conversion starts once it is ready.
         if !global_resources.sky_hdr_load_started {
             global_resources.sky_hdr_load_started = true;
             let sky_hdr_image = global_resources.sky_hdr_image.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let (data, width, height) =
-                    engine::asset_loader::load_hdr_file(constant::HDR_KLOPPENHEIM_02).await;
+                    engine::asset_loader::load_hdr_file(sky_box_type.path()).await;
                 *sky_hdr_image.borrow_mut() = Some(SkyHdrImage {
                     data,
                     width,
                     height,
+                    sky_box_type,
                 });
             });
             return;
@@ -146,6 +182,7 @@ pub struct SkyHdrImage {
     pub data: Vec<half::f16>,
     pub width: u32,
     pub height: u32,
+    pub sky_box_type: SkyBoxType,
 }
 
 pub struct WebGPUHDREnvironmentResource {

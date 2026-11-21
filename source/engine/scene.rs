@@ -1,4 +1,6 @@
-use crate::engine::constant::{GLTF_LOGO_PATH, GLTF_SCENE_TORUS_PATH};
+use crate::engine::constant::{
+    GLTF_LOGO_PATH, GLTF_TORUS_PATH, HDR_KLOPPENHEIM_02, SHANGHAI_BUND,
+};
 use crate::types::Shared;
 use crate::{frontend, rendering};
 
@@ -57,6 +59,8 @@ pub struct SceneParameter {
     pub background_color: [f32; 4],
     // sky box
     pub is_use_sky_box: bool,
+    pub sky_box_type: SkyBoxType,
+    pub requested_sky_box_type: Option<SkyBoxType>,
     // postprocess
     pub is_use_bloom: bool,
     pub bloom_threshold: f32,
@@ -78,16 +82,32 @@ pub struct SceneParameter {
 
 #[derive(Clone, Copy, Default, PartialEq)]
 pub enum SceneModel {
-    #[default]
     Torus,
+    #[default]
     GltfLogo,
 }
 
 impl SceneModel {
     pub fn path(self) -> &'static str {
         match self {
-            SceneModel::Torus => GLTF_SCENE_TORUS_PATH,
+            SceneModel::Torus => GLTF_TORUS_PATH,
             SceneModel::GltfLogo => GLTF_LOGO_PATH,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Default, PartialEq)]
+pub enum SkyBoxType {
+    #[default]
+    Kloppenheim02,
+    ShanghaiBund,
+}
+
+impl SkyBoxType {
+    pub fn path(self) -> &'static str {
+        match self {
+            SkyBoxType::Kloppenheim02 => HDR_KLOPPENHEIM_02,
+            SkyBoxType::ShanghaiBund => SHANGHAI_BUND,
         }
     }
 }
@@ -165,7 +185,9 @@ impl SceneParameter {
             differed_debug_type: 0,
             background_color: [0.0, 0.0, 0.0, 1.0],
             // sky box
-            is_use_sky_box: false,
+            is_use_sky_box: true,
+            sky_box_type: SkyBoxType::default(),
+            requested_sky_box_type: None,
             // postprocess
             is_use_bloom: false,
             bloom_threshold: 1.5,

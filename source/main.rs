@@ -126,6 +126,7 @@ pub async fn main() {
         let frame_started_at = performance.now();
         engine::scene::update_camera_control(&scene, &control_response_js);
         scene_loader::update_scene_model(&webgpu_interface, &scene, &scene_load_slot);
+        rendering::webgpu::hdr_convertion_shading::update_sky_box(&scene, &mut global_resources);
 
         rendering::webgpu::update_rendering_main(
             &webgpu_interface,

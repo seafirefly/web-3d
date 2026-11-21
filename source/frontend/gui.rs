@@ -1,7 +1,7 @@
 mod widgets;
 
 use crate::engine::scene::{
-    CompositeViewTransform, Scene, SceneModel, ShadingType, ToneMappingType,
+    CompositeViewTransform, Scene, SceneModel, ShadingType, SkyBoxType, ToneMappingType,
 };
 use crate::rendering::webgpu::gpu_profiler::{CpuTimings, GpuPassGroup, GpuTimings};
 use crate::types::Shared;
@@ -21,8 +21,13 @@ const AMBIENT_CHANNELS: [(&str, &str, &str, &str, usize); 4] = [
 ];
 
 const SCENE_MODELS: [(&str, SceneModel); 2] = [
-    ("torus", SceneModel::Torus),
     ("gltf_logo", SceneModel::GltfLogo),
+    ("torus", SceneModel::Torus),
+];
+
+const SKY_BOX_TYPES: [(&str, SkyBoxType); 2] = [
+    ("kloppenheim", SkyBoxType::Kloppenheim02),
+    ("shanghai", SkyBoxType::ShanghaiBund),
 ];
 
 const RENDER_TYPES: [(&str, ShadingType); 2] = [
@@ -317,6 +322,7 @@ fn wrapper_div(id: &str, active: bool) -> web_sys::Element {
 
 fn skybox(parent: &web_sys::Element, scene: &Shared<Scene>) {
     let content = dialog(parent, "skybox", "Skybox");
+
     let checked = scene.borrow().parameters.is_use_sky_box;
     append(
         &content,
@@ -324,6 +330,16 @@ fn skybox(parent: &web_sys::Element, scene: &Shared<Scene>) {
             s.parameters.is_use_sky_box = v;
         }),
     );
+
+    let sky_box = select(
+        "sky-box-select",
+        &SKY_BOX_TYPES,
+        Some(scene.borrow().parameters.sky_box_type),
+    );
+    on_select(scene, &sky_box, &SKY_BOX_TYPES, |s, v| {
+        s.parameters.requested_sky_box_type = Some(v);
+    });
+    append(&content, &widget_row("File", &[&value_wrapper(&sky_box)]));
 }
 
 fn postprocess(parent: &web_sys::Element, scene: &Shared<Scene>) {
