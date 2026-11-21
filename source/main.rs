@@ -37,12 +37,7 @@ impl PerformanceMetrics {
 
         let average_frame_time_ms = self.total_frame_time_ms / self.frame_count as f64;
         let frames_per_second = self.frame_count as f64 * 1000.0 / sample_duration_ms;
-        let cpu_busy_percent = self.total_frame_time_ms * 100.0 / sample_duration_ms;
-        frontend::gui::update_performance_statistics(
-            average_frame_time_ms,
-            frames_per_second,
-            cpu_busy_percent,
-        );
+        frontend::gui::update_performance_statistics(average_frame_time_ms, frames_per_second);
 
         self.sample_started_at = now;
         self.total_frame_time_ms = 0.0;
@@ -140,8 +135,7 @@ pub async fn main() {
             debug_log_with_time("Render OK");
         }
         let frame_finished_at = performance.now();
-        if performance_metrics.record_frame(frame_finished_at - frame_started_at, frame_finished_at)
-        {
+        if performance_metrics.record_frame(frame_finished_at - frame_started_at, frame_finished_at) {
             frontend::gui::update_gpu_statistics(
                 webgpu_interface.gpu_profiler.is_supported(),
                 webgpu_interface.gpu_profiler.latest_timings(),

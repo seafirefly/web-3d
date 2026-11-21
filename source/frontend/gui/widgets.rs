@@ -223,6 +223,7 @@ pub fn accordion(
     } else {
         "accordion-label"
     });
+    label.set_id(&format!("{id}-label"));
     label.set_text_content(Some(title));
     label.set_attribute("for", &id).unwrap();
 

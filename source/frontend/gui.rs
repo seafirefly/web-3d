@@ -85,11 +85,7 @@ pub fn create_frontend_gui(scene: &Shared<Scene>) {
     append(&gloo::utils::body(), &wrapper);
 }
 
-pub fn update_performance_statistics(
-    average_frame_time_ms: f64,
-    frames_per_second: f64,
-    cpu_busy_percent: f64,
-) {
+pub fn update_performance_statistics(average_frame_time_ms: f64, frames_per_second: f64) {
     update_statistic(
         "frame-time-analytics-value",
         &format!("{average_frame_time_ms:.2} ms"),
@@ -97,10 +93,6 @@ pub fn update_performance_statistics(
     update_statistic(
         "fps-analytics-value",
         &format!("{frames_per_second:.1} FPS"),
-    );
-    update_statistic(
-        "cpu-busy-analytics-value",
-        &format!("{cpu_busy_percent:.1}%"),
     );
 }
 
@@ -155,6 +147,18 @@ pub fn update_gpu_statistics(
         None => "-".to_string(),
     };
     update_statistic(CPU_TOTAL_ROW_ID, &cpu_total);
+
+    let gpu_label = match timings {
+        Some(t) => format!("GPU ({:.2} ms)", t.total_ms),
+        None => "GPU".to_string(),
+    };
+    update_statistic("accordion-performance-gpu-label", &gpu_label);
+
+    let cpu_label = match cpu_timings {
+        Some(t) => format!("CPU ({:.2} ms)", t.total_ms),
+        None => "CPU".to_string(),
+    };
+    update_statistic("accordion-performance-cpu-label", &cpu_label);
 }
 
 const GPU_TOTAL_ROW_ID: &str = "gpu-total-analytics-value";
@@ -565,10 +569,6 @@ fn performance(parent: &web_sys::Element) {
         &stat_row("Frame time", "frame-time-analytics-value", 0),
     );
     append(&content, &stat_row("FPS", "fps-analytics-value", 0));
-    append(
-        &content,
-        &stat_row("CPU busy", "cpu-busy-analytics-value", 0),
-    );
     let cpu = accordion(&content, "performance-cpu", "CPU", true);
     for (index, group) in GpuPassGroup::ALL.iter().enumerate() {
         append(
